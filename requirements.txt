@@ -1,0 +1,11 @@
+# Text overlap: OCR + overlap ratio (no training)
+# Python 3.10+
+
+opencv-python>=4.8.0
+easyocr>=1.7.0
+pandas>=2.0.0
+
+# Label detection (detect_labels.py)
+torch>=2.0.0
+transformers>=4.30.0
+Pillow>=9.0.0
