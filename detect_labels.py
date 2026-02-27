@@ -148,6 +148,20 @@ def main():
     print(f"Total: {len(results)} label(s).")
     print(f"Highlighted image saved to: {out_path}")
 
+    # Text overlap ratio metric
+    try:
+        if str(script_dir) not in sys.path:
+            sys.path.insert(0, str(script_dir))
+        from text_overlap_metric import compute_text_overlap_ratio
+        bboxes = [bbox for bbox, _text, _conf in results]
+        overlap_metrics = compute_text_overlap_ratio(bboxes)
+        print("\nText overlap ratio (metric):")
+        print(f"  Overlap ratio:              {overlap_metrics['overlap_ratio']:.4f}  (0 = none, 1 = full)")
+        print(f"  Fraction of labels overlapping: {overlap_metrics['fraction_labels_overlapping']:.4f}")
+        print(f"  Total label area: {overlap_metrics['total_label_area']:.2f} px²  |  Union area: {overlap_metrics['union_area']:.2f} px²")
+    except ImportError:
+        print("\n(Install shapely to compute text overlap ratio: pip install shapely)")
+
 
 if __name__ == "__main__":
     main()
