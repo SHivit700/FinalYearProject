@@ -1,36 +1,15 @@
 #!/usr/bin/env python3
-"""
-Detect all text labels on an image using OCR, print them, and save a copy
-with labels highlighted (bounding boxes) for visual confirmation.
-"""
-
 from pathlib import Path
 
 
 def run_label_detection(image_path, lang="en", output_path=None):
     """
-    Parameters
-    ----------
-    image_path : str or Path
-        Input image.
-    lang : str
-        Comma-separated languages for easyocr (default: "en").
-    output_path : str or Path or None
-        If not None, draw label overlays, save a PNG to this path (.png suffix), and
-        return the same dict. If None, skip overlay drawing and do not write any file;
-        ``highlighted_image`` is then a plain copy of the source (OCR-only path).
-
-    Returns
-    -------
-    dict with keys:
-        - "labels": list of dicts with keys "bbox", "text", "confidence"
-        - "highlighted_image": numpy array (BGR)
+    Detect text labels (polygon bbox, text, confidence), per-label axis-aligned width/height, and full-image shape. Optionally draw and save a highlighted diagnostic image.
     """
     import cv2
     import numpy as np
     import easyocr
 
-    # Load source; overlay is mutated for highlights while keeping the original for blending.
     path = Path(image_path)
     if not path.exists():
         raise FileNotFoundError(f"File not found: {path}")
@@ -48,15 +27,23 @@ def run_label_detection(image_path, lang="en", output_path=None):
     reader = easyocr.Reader(langs, verbose=False)
     results = reader.readtext(str(path))
 
-    # Stable dict shape for pipelines: bbox is 4 corners [[x,y], ...], text stripped, conf as float.
-    structured_results = [
-        {
-            "bbox": bbox,
-            "text": (text or "").strip(),
-            "confidence": float(conf),
-        }
-        for (bbox, text, conf) in results
-    ]
+    structured_results = []
+    for bbox, text, conf in results:
+        xs = [p[0] for p in bbox]
+        ys = [p[1] for p in bbox]
+        x_min, x_max = min(xs), max(xs)
+        y_min, y_max = min(ys), max(ys)
+        structured_results.append(
+            {
+                "bbox": bbox,
+                "text": (text or "").strip(),
+                "confidence": float(conf),
+                "width": max(0.0, float(x_max - x_min)),
+                "height": max(0.0, float(y_max - y_min)),
+            }
+        )
+
+    image_shape = tuple(int(x) for x in image.shape)
 
     if not results:
         highlighted = image.copy()
@@ -66,13 +53,14 @@ def run_label_detection(image_path, lang="en", output_path=None):
             cv2.imwrite(str(out_path), highlighted)
         return {
             "labels": structured_results,
+            "image_shape": image_shape,
             "highlighted_image": highlighted,
         }
 
     if output_path is None:
-        # OCR only: no overlays and no PNG
         return {
             "labels": structured_results,
+            "image_shape": image_shape,
             "highlighted_image": image.copy(),
         }
 
@@ -83,7 +71,6 @@ def run_label_detection(image_path, lang="en", output_path=None):
     thickness = 2
 
     overlay = image.copy()
-    # Pass 1: filled regions + boxes + text on overlay only.
     for bbox, text, _confidence in results:
         pts = np.array(bbox, dtype=np.int32)
         cv2.fillPoly(overlay, [pts], fill_color)
@@ -111,7 +98,6 @@ def run_label_detection(image_path, lang="en", output_path=None):
                 cv2.LINE_AA,
             )
 
-    # Pass 2: blend so fills read softly, then redraw sharp outlines and text on top.
     alpha = 0.5
     highlighted = cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0)
     for (bbox, text, _) in results:
@@ -147,5 +133,6 @@ def run_label_detection(image_path, lang="en", output_path=None):
 
     return {
         "labels": structured_results,
+        "image_shape": image_shape,
         "highlighted_image": highlighted,
     }
