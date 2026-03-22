@@ -2,113 +2,97 @@
 """
 Detect all text labels on an image using OCR, print them, and save a copy
 with labels highlighted (bounding boxes) for visual confirmation.
-Usage: python3 detect_labels.py <image_path> [--output output.png]
 """
 
-import argparse
-import sys
 from pathlib import Path
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Detect all text labels in an image (OCR) and highlight them in an output PNG."
-    )
-    parser.add_argument(
-        "image_path",
-        type=str,
-        help="Path to the input image file",
-    )
-    parser.add_argument(
-        "-o",
-        "--output",
-        type=str,
-        default=None,
-        help="Path for the output PNG (default: labels_output/<input_stem>_labels.png, folder outside Data)",
-    )
-    parser.add_argument(
-        "--lang",
-        type=str,
-        default="en",
-        help="Language(s) for OCR, comma-separated (default: en)",
-    )
-    args = parser.parse_args()
+def run_label_detection(image_path, lang="en", output_path=None):
+    """
+    Parameters
+    ----------
+    image_path : str or Path
+        Input image.
+    lang : str
+        Comma-separated languages for easyocr (default: "en").
+    output_path : str or Path or None
+        If not None, draw label overlays, save a PNG to this path (.png suffix), and
+        return the same dict. If None, skip overlay drawing and do not write any file;
+        ``highlighted_image`` is then a plain copy of the source (OCR-only path).
 
-    path = Path(args.image_path)
+    Returns
+    -------
+    dict with keys:
+        - "labels": list of dicts with keys "bbox", "text", "confidence"
+        - "highlighted_image": numpy array (BGR)
+    """
+    import cv2
+    import numpy as np
+    import easyocr
+
+    # Load source; overlay is mutated for highlights while keeping the original for blending.
+    path = Path(image_path)
     if not path.exists():
-        print(f"Error: File not found: {path}", file=sys.stderr)
-        sys.exit(1)
+        raise FileNotFoundError(f"File not found: {path}")
     if not path.is_file():
-        print(f"Error: Not a file: {path}", file=sys.stderr)
-        sys.exit(1)
+        raise ValueError(f"Not a file: {path}")
 
-    try:
-        import cv2
-        import numpy as np
-    except ImportError:
-        print("Error: opencv-python is required. Install with: pip install opencv-python", file=sys.stderr)
-        sys.exit(1)
-
-    try:
-        import easyocr
-    except ImportError:
-        print("Error: easyocr is required. Install with: pip install easyocr", file=sys.stderr)
-        sys.exit(1)
-
-    # Output path: save to labels_output folder
-    script_dir = Path(__file__).resolve().parent
-    output_dir = script_dir / "labels_output"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    if args.output is None:
-        out_path = output_dir / f"{path.stem}_labels.png"
-    else:
-        out_path = Path(args.output)
-    out_path = out_path.with_suffix(".png")
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Load image (OpenCV for drawing; EasyOCR can use path or numpy array)
     image = cv2.imread(str(path))
     if image is None:
-        print(f"Error: Could not load image: {path}", file=sys.stderr)
-        sys.exit(1)
-    overlay = image.copy()
+        raise ValueError(f"Could not load image: {path}")
 
-    # Initialize OCR (first run downloads model)
-    langs = [s.strip() for s in args.lang.split(",")]
-    print(f"Loading OCR reader (languages: {langs})...")
+    langs = [s.strip() for s in lang.split(",") if s.strip()]
+    if not langs:
+        langs = ["en"]
+
     reader = easyocr.Reader(langs, verbose=False)
-
-    print(f"Detecting labels in: {path}")
     results = reader.readtext(str(path))
 
-    if not results:
-        print("No text labels detected.")
-        cv2.imwrite(str(out_path), image)
-        print(f"Saved unchanged image to: {out_path}")
-        return
+    # Stable dict shape for pipelines: bbox is 4 corners [[x,y], ...], text stripped, conf as float.
+    structured_results = [
+        {
+            "bbox": bbox,
+            "text": (text or "").strip(),
+            "confidence": float(conf),
+        }
+        for (bbox, text, conf) in results
+    ]
 
-    # Colors (BGR): box, fill highlight, text background, text
-    box_color = (0, 200, 0)           # green
-    fill_color = (200, 255, 200)      # light green
+    if not results:
+        highlighted = image.copy()
+        if output_path is not None:
+            out_path = Path(output_path).with_suffix(".png")
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            cv2.imwrite(str(out_path), highlighted)
+        return {
+            "labels": structured_results,
+            "highlighted_image": highlighted,
+        }
+
+    if output_path is None:
+        # OCR only: no overlays and no PNG
+        return {
+            "labels": structured_results,
+            "highlighted_image": image.copy(),
+        }
+
+    box_color = (0, 200, 0)
+    fill_color = (200, 255, 200)
     text_bg_color = (0, 200, 0)
     text_color = (255, 255, 255)
     thickness = 2
 
-    print("\nDetected labels:")
-    print("-" * 50)
-
-    for i, (bbox, text, confidence) in enumerate(results, 1):
-        # bbox: [[x1,y1], [x2,y1], [x2,y2], [x1,y2]]
+    overlay = image.copy()
+    # Pass 1: filled regions + boxes + text on overlay only.
+    for bbox, text, _confidence in results:
         pts = np.array(bbox, dtype=np.int32)
         cv2.fillPoly(overlay, [pts], fill_color)
         cv2.polylines(overlay, [pts], True, box_color, thickness)
-        # Label text above the box
-        text = (text or "").strip()
-        print(f"  {i}. {text!r}  (confidence: {confidence:.2%})")
-        if text:
+        text_draw = (text or "").strip()
+        if text_draw:
             x_min = int(min(p[0] for p in bbox))
             y_min = int(min(p[1] for p in bbox))
-            (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+            (tw, th), _ = cv2.getTextSize(text_draw, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
             cv2.rectangle(
                 overlay,
                 (x_min, y_min - th - 6),
@@ -118,7 +102,7 @@ def main():
             )
             cv2.putText(
                 overlay,
-                text,
+                text_draw,
                 (x_min + 2, y_min - 4),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.5,
@@ -127,41 +111,41 @@ def main():
                 cv2.LINE_AA,
             )
 
-    # Blend overlay with original so highlights are visible but not harsh
+    # Pass 2: blend so fills read softly, then redraw sharp outlines and text on top.
     alpha = 0.5
-    result = cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0)
-    # Redraw sharp boxes and text on top
+    highlighted = cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0)
     for (bbox, text, _) in results:
         pts = np.array(bbox, dtype=np.int32)
-        cv2.polylines(result, [pts], True, box_color, thickness)
+        cv2.polylines(highlighted, [pts], True, box_color, thickness)
     for (bbox, text, _) in results:
-        text = (text or "").strip()
-        if text:
+        text_draw = (text or "").strip()
+        if text_draw:
             x_min = int(min(p[0] for p in bbox))
             y_min = int(min(p[1] for p in bbox))
-            (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-            cv2.rectangle(result, (x_min, y_min - th - 6), (x_min + tw + 4, y_min), text_bg_color, -1)
-            cv2.putText(result, text, (x_min + 2, y_min - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, text_color, 1, cv2.LINE_AA)
+            (tw, th), _ = cv2.getTextSize(text_draw, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+            cv2.rectangle(
+                highlighted,
+                (x_min, y_min - th - 6),
+                (x_min + tw + 4, y_min),
+                text_bg_color,
+                -1,
+            )
+            cv2.putText(
+                highlighted,
+                text_draw,
+                (x_min + 2, y_min - 4),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                text_color,
+                1,
+                cv2.LINE_AA,
+            )
 
-    cv2.imwrite(str(out_path), result)
-    print("-" * 50)
-    print(f"Total: {len(results)} label(s).")
-    print(f"Highlighted image saved to: {out_path}")
+    out_path = Path(output_path).with_suffix(".png")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(out_path), highlighted)
 
-    # Text overlap ratio metric
-    try:
-        if str(script_dir) not in sys.path:
-            sys.path.insert(0, str(script_dir))
-        from text_overlap_metric import compute_text_overlap_ratio
-        bboxes = [bbox for bbox, _text, _conf in results]
-        overlap_metrics = compute_text_overlap_ratio(bboxes)
-        print("\nText overlap ratio (metric):")
-        print(f"  Overlap ratio:              {overlap_metrics['overlap_ratio']:.4f}  (0 = none, 1 = full)")
-        print(f"  Fraction of labels overlapping: {overlap_metrics['fraction_labels_overlapping']:.4f}")
-        print(f"  Total label area: {overlap_metrics['total_label_area']:.2f} px²  |  Union area: {overlap_metrics['union_area']:.2f} px²")
-    except ImportError:
-        print("\n(Install shapely to compute text overlap ratio: pip install shapely)")
-
-
-if __name__ == "__main__":
-    main()
+    return {
+        "labels": structured_results,
+        "highlighted_image": highlighted,
+    }
