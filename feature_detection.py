@@ -34,8 +34,7 @@ def extract_features_for_image(image_path: str, lang: str = "en") -> Dict[str, A
     features: Dict[str, Any] = {}
 
     # 2.1 Label area ratio (label balance & visual complexity)
-    label_area_ratio = compute_label_area_ratio(labels, image_shape)
-    features["label_area_ratio"] = label_area_ratio
+    features["label_area"] = compute_label_area_ratio(labels, image_shape)
 
     # 2.2 Label readability (text quality & clarity)
     features["label_readability"] = compute_label_readability(labels)
@@ -72,7 +71,11 @@ if __name__ == "__main__":
     # Log the feature(s)
     print("--------------------------------")
     feats = result["features"]
-    print(f"[ENTRY] label_area_ratio: {feats['label_area_ratio']:.4f}")
+    label_area = feats["label_area"]
+    print(
+        f"[ENTRY] label_area_ratio: {label_area.ratio:.4f} "
+        f"({label_area.category})"
+    )
     overlap_metrics = feats["overlap_metrics"]
 
     print("--------------------------------")
