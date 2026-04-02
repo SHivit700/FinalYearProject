@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import math
 from pathlib import Path
 from typing import Any, Dict
 
@@ -39,7 +40,7 @@ def extract_features_for_image(image_path: str, lang: str = "en") -> Dict[str, A
     # 2.2 Label readability (text quality & clarity)
     features["label_readability"] = compute_label_readability(labels)
 
-    # 2.3 Label overlap (text density & visual clutter)
+    # 2.3 Label overlap (font-normalised gap threshold and IoU)
     features["overlap_metrics"] = compute_label_overlap_metrics(labels, image_shape)
 
     return {
@@ -62,34 +63,38 @@ if __name__ == "__main__":
 
     result = extract_features_for_image(args.image_path, lang=args.lang)
 
-    print("--------------------------------")
+    print("---------------IMAGE------------------")
     print(f"[ENTRY] Processed image: {result['image_path']}")
 
-    print("--------------------------------")
+    print("---------------LABELS------------------")
     print(f"[ENTRY] Detected {len(result['labels'])} label(s).")
 
     # Log the feature(s)
-    print("--------------------------------")
+    print("---------------LABEL AREA------------------")
     feats = result["features"]
     label_area = feats["label_area"]
     print(
         f"[ENTRY] label_area_ratio: {label_area.ratio:.4f} "
         f"({label_area.category})"
     )
+
+    print("--------------LABEL OVERLAP METRICS------------------")
     overlap_metrics = feats["overlap_metrics"]
+    print(f"[ENTRY] spacing_verdict: {overlap_metrics['spacing_verdict']}")
+    print(f"[ENTRY] fraction_labels_too_close: {overlap_metrics['fraction_labels_too_close']:.4f}")
+    print(f"[ENTRY] fraction_pairs_too_close: {overlap_metrics['fraction_pairs_too_close']:.4f}")
+    print(f"[ENTRY] mean_normalised_gap: {overlap_metrics['mean_normalised_gap']:.4f}")
+    print(f"[ENTRY] min_normalised_gap: {overlap_metrics['min_normalised_gap']:.4f}")
+    print(f"[ENTRY] fraction_pairs_any_iou: {overlap_metrics['fraction_pairs_any_iou']:.4f}")
 
-    print("--------------------------------")
-    print(f"[ENTRY] Text overlap ratio: {overlap_metrics['overlap_ratio']:.4f}")
-    print(
-        f"[ENTRY] Fraction of labels overlapping: {overlap_metrics['fraction_labels_overlapping']:.4f}"
-    )
-
-    print("--------------------------------")
+    print("---------------LABEL READABILITY------------------")
     label_readability = feats["label_readability"]
     print(
         f"[ENTRY] label_readability: mean_confidence={label_readability['mean_confidence']:.4f} "
         f"(threshold={label_readability['readability_threshold']:.4f}), "
         f"labels_below_threshold={label_readability['labels_below_threshold']}, "
+        f"fraction_below={label_readability['fraction_labels_below_threshold']:.4f} "
+        f"(max_fraction_ok={label_readability['max_fraction_below_threshold']:.4f}), "
         f"status={label_readability['readability_status']}"
     )
     for row in label_readability["labels_below_threshold_details"]:
