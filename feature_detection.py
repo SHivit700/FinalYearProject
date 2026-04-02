@@ -84,7 +84,6 @@ if __name__ == "__main__":
     print(f"[ENTRY] fraction_labels_too_close: {overlap_metrics['fraction_labels_too_close']:.4f}")
     print(f"[ENTRY] fraction_pairs_too_close: {overlap_metrics['fraction_pairs_too_close']:.4f}")
     print(f"[ENTRY] mean_normalised_gap: {overlap_metrics['mean_normalised_gap']:.4f}")
-    print(f"[ENTRY] min_normalised_gap: {overlap_metrics['min_normalised_gap']:.4f}")
     print(f"[ENTRY] fraction_pairs_any_iou: {overlap_metrics['fraction_pairs_any_iou']:.4f}")
 
     print("---------------LABEL READABILITY------------------")

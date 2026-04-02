@@ -117,7 +117,6 @@ def compute_label_overlap_metrics(
     _zero = {
         "fraction_labels_too_close": 0.0,
         "mean_normalised_gap": float("inf"),
-        "min_normalised_gap": float("inf"),
         "fraction_pairs_too_close": 0.0,
         "fraction_pairs_any_iou": 0.0,
         "spacing_verdict": "well_spaced",
@@ -189,7 +188,6 @@ def compute_label_overlap_metrics(
     return {
         "fraction_labels_too_close": fraction_labels_too_close,
         "mean_normalised_gap": mean_ng,
-        "min_normalised_gap": min_ng,
         "fraction_pairs_too_close": fraction_pairs_too_close,
         "fraction_pairs_any_iou": fraction_pairs_any_iou,
         "spacing_verdict": spacing_verdict,
