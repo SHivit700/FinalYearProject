@@ -82,14 +82,7 @@ def run_shape_detection(
             }
         )
 
-    if output_path is None:
-        out = (
-            Path(__file__).resolve().parent
-            / "Data"
-            / "shapes_output"
-            / f"shapes_{image_path.stem}.png"
-        )
-    else:
+    if output_path:
         out = Path(output_path).with_suffix(".png")
 
     out.parent.mkdir(parents=True, exist_ok=True)

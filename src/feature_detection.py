@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-import math
 from pathlib import Path
 from typing import Any, Dict
 
-from detect_labels import run_label_detection
-from detect_shapes import run_shape_detection
-from label_area_ratio import compute_label_area_ratio
-from label_overlap import compute_label_overlap_metrics
-from label_readability import compute_label_readability
+from detection.detect_labels import run_label_detection
+from detection.detect_shapes import run_shape_detection
+from features.label_area_ratio import compute_label_area_ratio
+from features.label_overlap import compute_label_overlap_metrics
+from features.label_readability import compute_label_readability
 
 
 def extract_features_for_image(image_path: str, lang: str = "en") -> Dict[str, Any]:
@@ -20,7 +19,7 @@ def extract_features_for_image(image_path: str, lang: str = "en") -> Dict[str, A
         3. Aggregate all feature values into a single dict for downstream quality modelling.
     """
     image_path = Path(image_path)
-    # Same level as the diagrams folder (e.g. Data/labels_output/, Data/shapes_output/ next to Data/Diagrams/).
+    # Same level as the diagrams folder (e.g. data/labels_output/, data/shapes_output/ next to data/diagrams/).
     output_path = (
         image_path.parent.parent
         / "labels_output"
