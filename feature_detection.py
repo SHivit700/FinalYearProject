@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from detect_labels import run_label_detection
+from detect_shapes import run_shape_detection
 from label_area_ratio import compute_label_area_ratio
 from label_overlap import compute_label_overlap_metrics
 from label_readability import compute_label_readability
@@ -19,7 +20,7 @@ def extract_features_for_image(image_path: str, lang: str = "en") -> Dict[str, A
         3. Aggregate all feature values into a single dict for downstream quality modelling.
     """
     image_path = Path(image_path)
-    # Same level as the diagrams folder (e.g. Data/labels_output/ next to Data/Diagrams/).
+    # Same level as the diagrams folder (e.g. Data/labels_output/, Data/shapes_output/ next to Data/Diagrams/).
     output_path = (
         image_path.parent.parent
         / "labels_output"
@@ -30,6 +31,16 @@ def extract_features_for_image(image_path: str, lang: str = "en") -> Dict[str, A
     detection_result = run_label_detection(str(image_path), lang=lang, output_path=output_path)
     labels = detection_result["labels"]
     image_shape = detection_result["image_shape"]
+
+    shapes_output_path = (
+        image_path.parent.parent
+        / "shapes_output"
+        / f"shapes_{image_path.stem}.png"
+    )
+    shapes, _shape_image_shape, _shape_highlighted = run_shape_detection(
+        str(image_path),
+        output_path=str(shapes_output_path),
+    )
 
     # Step 2: feature modules
     features: Dict[str, Any] = {}
@@ -46,6 +57,7 @@ def extract_features_for_image(image_path: str, lang: str = "en") -> Dict[str, A
     return {
         "image_path": str(image_path),
         "labels": labels,
+        "shapes": shapes,
         "image_shape": image_shape,
         "features": features,
     }
@@ -61,6 +73,12 @@ if __name__ == "__main__":
     parser.add_argument("--lang", default="en", help="OCR language codes (comma-separated)")
     args = parser.parse_args()
 
+    path = Path(args.image_path)
+    if not path.exists():
+        raise FileNotFoundError(f"File not found: {path}")
+    if not path.is_file():
+        raise ValueError(f"Not a file: {path}")
+
     result = extract_features_for_image(args.image_path, lang=args.lang)
 
     print("---------------IMAGE------------------")
@@ -68,6 +86,10 @@ if __name__ == "__main__":
 
     print("---------------LABELS------------------")
     print(f"[ENTRY] Detected {len(result['labels'])} label(s).")
+
+    print("---------------SHAPES------------------")
+    shapes = result["shapes"]
+    print(f"[ENTRY] Detected {len(shapes)} contour(s).")
 
     # Log the feature(s)
     print("---------------LABEL AREA------------------")

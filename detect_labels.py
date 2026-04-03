@@ -10,22 +10,16 @@ def run_label_detection(image_path, lang="en", output_path=None):
     import numpy as np
     import easyocr
 
-    path = Path(image_path)
-    if not path.exists():
-        raise FileNotFoundError(f"File not found: {path}")
-    if not path.is_file():
-        raise ValueError(f"Not a file: {path}")
-
-    image = cv2.imread(str(path))
+    image = cv2.imread(image_path)
     if image is None:
-        raise ValueError(f"Could not load image: {path}")
+        raise ValueError(f"Could not load image: {image_path}")
 
     langs = [s.strip() for s in lang.split(",") if s.strip()]
     if not langs:
         langs = ["en"]
 
     reader = easyocr.Reader(langs, verbose=False)
-    results = reader.readtext(str(path))
+    results = reader.readtext(image_path)
 
     structured_results = []
     for bbox, text, conf in results:
