@@ -71,7 +71,7 @@ def run_shape_detection(
             random.randint(0, 255),
             random.randint(0, 255),
         )
-        cv2.drawContours(highlighted, [contour], 0, color, 10)
+        cv2.drawContours(highlighted, [contour], 0, color, 4)
 
         shapes.append(
             {
