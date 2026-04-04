@@ -4,6 +4,7 @@ from typing import Any, Dict
 
 from detection.detect_labels import run_label_detection
 from detection.detect_shapes import run_shape_detection
+from features.edge_margin_ratio import compute_edge_margin_metrics
 from features.label_area_ratio import compute_label_area_ratio
 from features.label_overlap import compute_label_overlap_metrics
 from features.label_readability import compute_label_readability
@@ -36,9 +37,11 @@ def extract_features_for_image(image_path: str, lang: str = "en") -> Dict[str, A
         / "shapes_output"
         / f"shapes_{image_path.stem}.png"
     )
+    margin_fraction = 0.05
     shapes, _shape_image_shape, _shape_highlighted = run_shape_detection(
         str(image_path),
         output_path=str(shapes_output_path),
+        edge_margin_fraction=margin_fraction,
     )
 
     # Step 2: feature modules
@@ -52,6 +55,11 @@ def extract_features_for_image(image_path: str, lang: str = "en") -> Dict[str, A
 
     # 2.3 Label overlap (font-normalised gap threshold and IoU)
     features["overlap_metrics"] = compute_label_overlap_metrics(labels, image_shape)
+
+    # 2.4 Edge clearance (labels + shape contours vs image border)
+    features["edge_clearance"] = compute_edge_margin_metrics(
+        labels, shapes, image_shape, margin_fraction=margin_fraction
+    )
 
     return {
         "image_path": str(image_path),
@@ -97,6 +105,13 @@ if __name__ == "__main__":
     print(
         f"[ENTRY] label_area_ratio: {label_area.ratio:.4f} "
         f"({label_area.category})"
+    )
+
+    print("---------------EDGE CLEARANCE (Labels/Shapes close to edge)------------")
+    ec = feats["edge_clearance"]
+    print(
+        f"[ENTRY] labels_fraction_violating={ec['labels_fraction_violating']:.4f}, "
+        f"shapes_fraction_violating={ec['shapes_fraction_violating']:.4f}"
     )
 
     print("--------------LABEL OVERLAP METRICS------------------")

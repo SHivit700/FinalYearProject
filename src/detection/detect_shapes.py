@@ -84,8 +84,7 @@ def run_shape_detection(
 
     if output_path:
         out = Path(output_path).with_suffix(".png")
-
-    out.parent.mkdir(parents=True, exist_ok=True)
-    cv2.imwrite(str(out), highlighted)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(str(out), highlighted)
 
     return shapes, image_shape, highlighted
