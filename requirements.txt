@@ -4,6 +4,8 @@
 opencv-python>=4.8.0
 easyocr>=1.7.0
 pandas>=2.0.0
+scikit-learn>=1.3.0
+joblib>=1.3.0
 
 # Label detection (detect_labels.py)
 torch>=2.0.0
@@ -12,3 +14,7 @@ Pillow>=9.0.0
 
 # Text overlap ratio metric
 shapely>=2.0.0
+
+# batch_rate_images.py (OpenAI vision ratings)
+openai>=1.0.0
+python-dotenv>=1.0.0

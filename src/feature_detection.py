@@ -4,10 +4,12 @@ from typing import Any, Dict
 
 from detection.detect_labels import run_label_detection
 from detection.detect_shapes import run_shape_detection
+from detection.preview_text import label_preview_line, shape_preview_line
 from features.edge_margin_ratio import compute_edge_margin_metrics
 from features.label_area_ratio import compute_label_area_ratio
 from features.label_overlap import compute_label_overlap_metrics
 from features.label_readability import compute_label_readability
+from features.layout_structure_score import compute_layout_structure_score
 
 
 def extract_features_for_image(image_path: str, lang: str = "en") -> Dict[str, Any]:
@@ -41,7 +43,6 @@ def extract_features_for_image(image_path: str, lang: str = "en") -> Dict[str, A
     shapes, _shape_image_shape, _shape_highlighted = run_shape_detection(
         str(image_path),
         output_path=str(shapes_output_path),
-        edge_margin_fraction=margin_fraction,
     )
 
     # Step 2: feature modules
@@ -60,6 +61,9 @@ def extract_features_for_image(image_path: str, lang: str = "en") -> Dict[str, A
     features["edge_clearance"] = compute_edge_margin_metrics(
         labels, shapes, image_shape, margin_fraction=margin_fraction
     )
+
+    # 2.5 Layout structure (ML regressor on contour layout features)
+    features["layout_structure"] = compute_layout_structure_score(shapes, image_shape)
 
     return {
         "image_path": str(image_path),
@@ -93,10 +97,14 @@ if __name__ == "__main__":
 
     print("---------------LABELS------------------")
     print(f"[ENTRY] Detected {len(result['labels'])} label(s).")
+    # for label in result["labels"]:
+    #     print(f"[ENTRY] {label_preview_line(label)}")
 
     print("---------------SHAPES------------------")
     shapes = result["shapes"]
     print(f"[ENTRY] Detected {len(shapes)} contour(s).")
+    # for i, shape in enumerate(shapes):
+    #     print(f"[ENTRY] Shape #{i}: {shape_preview_line(shape)}")
 
     # Log the feature(s)
     print("---------------LABEL AREA------------------")
@@ -137,5 +145,11 @@ if __name__ == "__main__":
             f"[ENTRY]   low-confidence label #{row['index']}: "
             f"{row['text']!r} conf={row['confidence']:.4f}"
         )
+
+    print("---------------LAYOUT STRUCTURE (ML)------------------")
+    layout = feats["layout_structure"]
+    print(
+        f"[ENTRY] layout_structure_score: {layout['layout_structure_score']:.4f}"
+    )
 
     print("--------------------------------")
