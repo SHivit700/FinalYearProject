@@ -3,9 +3,7 @@ from pathlib import Path
 
 
 def run_label_detection(image_path, lang="en", output_path=None):
-    """
-    Detect text labels (polygon bbox, text, confidence), per-label axis-aligned width/height, and full-image shape. Optionally draw and save a highlighted diagnostic image.
-    """
+    """OCR the image; optionally write a highlighted PNG. Returns labels, shape, overlays, and the BGR array."""
     import cv2
     import numpy as np
     import easyocr
@@ -49,6 +47,7 @@ def run_label_detection(image_path, lang="en", output_path=None):
             "labels": structured_results,
             "image_shape": image_shape,
             "highlighted_image": highlighted,
+            "bgr_image": image,
         }
 
     if output_path is None:
@@ -56,6 +55,7 @@ def run_label_detection(image_path, lang="en", output_path=None):
             "labels": structured_results,
             "image_shape": image_shape,
             "highlighted_image": image.copy(),
+            "bgr_image": image,
         }
 
     box_color = (0, 200, 0)
@@ -129,4 +129,5 @@ def run_label_detection(image_path, lang="en", output_path=None):
         "labels": structured_results,
         "image_shape": image_shape,
         "highlighted_image": highlighted,
+        "bgr_image": image,
     }

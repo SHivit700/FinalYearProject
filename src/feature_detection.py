@@ -4,8 +4,8 @@ from typing import Any, Dict
 
 from detection.detect_labels import run_label_detection
 from detection.detect_shapes import run_shape_detection
-from detection.preview_text import label_preview_line, shape_preview_line
 from features.edge_margin_ratio import compute_edge_margin_metrics
+from features.font_hierarchy import compute_font_hierarchy_metrics
 from features.label_area_ratio import compute_label_area_ratio
 from features.label_overlap import compute_label_overlap_metrics
 from features.label_readability import compute_label_readability
@@ -13,23 +13,15 @@ from features.layout_structure_score import compute_layout_structure_score
 
 
 def extract_features_for_image(image_path: str, lang: str = "en") -> Dict[str, Any]:
-    """
-    Top-level feature extraction entry point.
-
-    Flow:
-        1. Run OCR to detect labels.
-        2. Feed detections into feature modules.
-        3. Aggregate all feature values into a single dict for downstream quality modelling.
-    """
+    """OCR and shape detection, then aggregate feature metrics into one dict."""
     image_path = Path(image_path)
-    # Same level as the diagrams folder (e.g. data/labels_output/, data/shapes_output/ next to data/diagrams/).
+    # Previews go next to the diagram tree (e.g. labels_output/, shapes_output/).
     output_path = (
         image_path.parent.parent
         / "labels_output"
         / f"{image_path.stem}_labels.png"
     )
 
-    # Step 1: OCR / label detection
     detection_result = run_label_detection(str(image_path), lang=lang, output_path=output_path)
     labels = detection_result["labels"]
     image_shape = detection_result["image_shape"]
@@ -45,25 +37,16 @@ def extract_features_for_image(image_path: str, lang: str = "en") -> Dict[str, A
         output_path=str(shapes_output_path),
     )
 
-    # Step 2: feature modules
     features: Dict[str, Any] = {}
 
-    # 2.1 Label area ratio (label balance & visual complexity)
     features["label_area"] = compute_label_area_ratio(labels, image_shape)
-
-    # 2.2 Label readability (text quality & clarity)
     features["label_readability"] = compute_label_readability(labels)
-
-    # 2.3 Label overlap (font-normalised gap threshold and IoU)
     features["overlap_metrics"] = compute_label_overlap_metrics(labels, image_shape)
-
-    # 2.4 Edge clearance (labels + shape contours vs image border)
     features["edge_clearance"] = compute_edge_margin_metrics(
         labels, shapes, image_shape, margin_fraction=margin_fraction
     )
-
-    # 2.5 Layout structure (ML regressor on contour layout features)
     features["layout_structure"] = compute_layout_structure_score(shapes, image_shape)
+    features["font_hierarchy"] = compute_font_hierarchy_metrics(labels)
 
     return {
         "image_path": str(image_path),
@@ -78,10 +61,14 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Global feature extraction entry point for diagram quality."
+        description="Extract diagram features, save label/shape previews, print metrics.",
     )
     parser.add_argument("image_path", help="Path to input diagram image")
-    parser.add_argument("--lang", default="en", help="OCR language codes (comma-separated)")
+    parser.add_argument(
+        "--lang",
+        default="en",
+        help="OCR language codes for EasyOCR (comma-separated)",
+    )
     args = parser.parse_args()
 
     path = Path(args.image_path)
@@ -90,32 +77,27 @@ if __name__ == "__main__":
     if not path.is_file():
         raise ValueError(f"Not a file: {path}")
 
-    result = extract_features_for_image(args.image_path, lang=args.lang)
+    result = extract_features_for_image(str(path), lang=args.lang)
 
     print("---------------IMAGE------------------")
     print(f"[ENTRY] Processed image: {result['image_path']}")
 
     print("---------------LABELS------------------")
     print(f"[ENTRY] Detected {len(result['labels'])} label(s).")
-    # for label in result["labels"]:
-    #     print(f"[ENTRY] {label_preview_line(label)}")
 
     print("---------------SHAPES------------------")
-    shapes = result["shapes"]
-    print(f"[ENTRY] Detected {len(shapes)} contour(s).")
-    # for i, shape in enumerate(shapes):
-    #     print(f"[ENTRY] Shape #{i}: {shape_preview_line(shape)}")
+    print(f"[ENTRY] Detected {len(result['shapes'])} contour(s).")
 
-    # Log the feature(s)
-    print("---------------LABEL AREA------------------")
     feats = result["features"]
+
+    print("---------------LABEL AREA------------------")
     label_area = feats["label_area"]
     print(
         f"[ENTRY] label_area_ratio: {label_area.ratio:.4f} "
         f"({label_area.category})"
     )
 
-    print("---------------EDGE CLEARANCE (Labels/Shapes close to edge)------------")
+    print("---------------EDGE CLEARANCE------------------")
     ec = feats["edge_clearance"]
     print(
         f"[ENTRY] labels_fraction_violating={ec['labels_fraction_violating']:.4f}, "
@@ -125,10 +107,18 @@ if __name__ == "__main__":
     print("--------------LABEL OVERLAP METRICS------------------")
     overlap_metrics = feats["overlap_metrics"]
     print(f"[ENTRY] spacing_verdict: {overlap_metrics['spacing_verdict']}")
-    print(f"[ENTRY] fraction_labels_too_close: {overlap_metrics['fraction_labels_too_close']:.4f}")
-    print(f"[ENTRY] fraction_pairs_too_close: {overlap_metrics['fraction_pairs_too_close']:.4f}")
-    print(f"[ENTRY] mean_normalised_gap: {overlap_metrics['mean_normalised_gap']:.4f}")
-    print(f"[ENTRY] fraction_pairs_any_iou: {overlap_metrics['fraction_pairs_any_iou']:.4f}")
+    print(
+        f"[ENTRY] fraction_labels_too_close: {overlap_metrics['fraction_labels_too_close']:.4f}"
+    )
+    print(
+        f"[ENTRY] fraction_pairs_too_close: {overlap_metrics['fraction_pairs_too_close']:.4f}"
+    )
+    print(
+        f"[ENTRY] mean_normalised_gap: {overlap_metrics['mean_normalised_gap']:.4f}"
+    )
+    print(
+        f"[ENTRY] fraction_pairs_any_iou: {overlap_metrics['fraction_pairs_any_iou']:.4f}"
+    )
 
     print("---------------LABEL READABILITY------------------")
     label_readability = feats["label_readability"]
@@ -148,8 +138,25 @@ if __name__ == "__main__":
 
     print("---------------LAYOUT STRUCTURE (ML)------------------")
     layout = feats["layout_structure"]
-    print(
-        f"[ENTRY] layout_structure_score: {layout['layout_structure_score']:.4f}"
-    )
+    print(f"[ENTRY] layout_structure_score: {layout['layout_structure_score']:.4f}")
+
+    print("---------------FONT HIERARCHY------------------")
+    fh = feats["font_hierarchy"]
+    lc = fh["level_consistency"]
+    if lc["n_labels"] == 0:
+        print("[ENTRY] level_consistency: (no labels)")
+    else:
+        print(
+            f"[ENTRY] level_consistency: n={lc['n_labels']} "
+            f"dominant_level={lc['dominant_level']!r} "
+            f"fraction={lc['dominant_fraction']:.3f} by_level={lc['by_level']}"
+        )
+    fsb = fh.get("font_score_breakdown")
+    if fsb is not None:
+        print(
+            f"[ENTRY] font_score: {fsb['font_score']:.2f} "
+            f"(S_L={fsb['S_L']:.1f} S_C={fsb['S_C']:.1f} S_S={fsb['S_S']:.1f}, "
+            f"r={fsb['r_spread']:.3f}, h_min={fsb['h_min_px']} h_max={fsb['h_max_px']})"
+        )
 
     print("--------------------------------")
