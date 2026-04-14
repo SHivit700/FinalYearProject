@@ -5,6 +5,7 @@ from typing import Any, Dict
 from detection.detect_labels import run_label_detection
 from detection.detect_shapes import run_shape_detection
 from features.edge_margin_ratio import compute_edge_margin_metrics
+from features.container_utilization.container_utilization_detection import compute_container_utilization_metrics
 from features.font_hierarchy import compute_font_hierarchy_metrics
 from features.label_area_ratio import compute_label_area_ratio
 from features.label_overlap import compute_label_overlap_metrics
@@ -25,6 +26,7 @@ def extract_features_for_image(image_path: str, lang: str = "en") -> Dict[str, A
     detection_result = run_label_detection(str(image_path), lang=lang, output_path=output_path)
     labels = detection_result["labels"]
     image_shape = detection_result["image_shape"]
+    bgr_image = detection_result["bgr_image"]
 
     shapes_output_path = (
         image_path.parent.parent
@@ -37,6 +39,12 @@ def extract_features_for_image(image_path: str, lang: str = "en") -> Dict[str, A
         output_path=str(shapes_output_path),
     )
 
+    container_utilization_overlay_path = (
+        image_path.parent.parent
+        / "shapes_output"
+        / f"container_utilization_{image_path.stem}.png"
+    )
+
     features: Dict[str, Any] = {}
 
     features["label_area"] = compute_label_area_ratio(labels, image_shape)
@@ -47,6 +55,18 @@ def extract_features_for_image(image_path: str, lang: str = "en") -> Dict[str, A
     )
     features["layout_structure"] = compute_layout_structure_score(shapes, image_shape)
     features["font_hierarchy"] = compute_font_hierarchy_metrics(labels)
+    _container_utilization = compute_container_utilization_metrics(
+        bgr_image,
+        labels,
+        shapes,
+        image_shape,
+        output_path=str(container_utilization_overlay_path),
+    )
+    features["container_utilization"] = {
+        "container_utilization_score": _container_utilization["image_metrics"][
+            "container_utilization_score"
+        ],
+    }
 
     return {
         "image_path": str(image_path),
@@ -158,5 +178,9 @@ if __name__ == "__main__":
             f"(S_L={fsb['S_L']:.1f} S_C={fsb['S_C']:.1f} S_S={fsb['S_S']:.1f}, "
             f"r={fsb['r_spread']:.3f}, h_min={fsb['h_min_px']} h_max={fsb['h_max_px']})"
         )
+
+    print("---------------CONTAINER UTILIZATION------------------")
+    cu_score = feats["container_utilization"]["container_utilization_score"]
+    print(f"[ENTRY] container_utilization_score: {cu_score:.6f}")
 
     print("--------------------------------")

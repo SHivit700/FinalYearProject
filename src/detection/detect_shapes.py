@@ -12,6 +12,8 @@ from typing import Any
 import cv2
 import numpy as np
 
+_BORDER_MARGIN_PX = 3
+
 
 def run_shape_detection(
     image_path: str,
@@ -41,9 +43,12 @@ def run_shape_detection(
         gray_image, threshold, 255, cv2.THRESH_BINARY
     )
 
-    contours, _ = cv2.findContours(
+    contours, hierarchy = cv2.findContours(
         thresholded_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
     )
+    # hierarchy shape: (1, N, 4) — [next_sibling, prev_sibling, first_child, parent]
+    # Flatten for easy access; guard against None (empty image).
+    hier = hierarchy[0] if (hierarchy is not None and len(hierarchy) > 0) else None
 
     if image.ndim == 2:
         highlighted = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
@@ -73,12 +78,36 @@ def run_shape_detection(
         )
         cv2.drawContours(highlighted, [contour], 0, color, 4)
 
+        x, y, w, h = cv2.boundingRect(contour)
+        bbox_area = max(w * h, 1)
+        aspect_ratio = max(w, h) / max(min(w, h), 1)
+        rectangularity = area / bbox_area
+
+        img_h, img_w = image_shape[0], image_shape[1]
+        touches_border = (
+            x <= _BORDER_MARGIN_PX
+            or y <= _BORDER_MARGIN_PX
+            or (x + w) >= (img_w - _BORDER_MARGIN_PX)
+            or (y + h) >= (img_h - _BORDER_MARGIN_PX)
+        )
+
+        parent_contour_index = int(hier[i][3]) if hier is not None else -1
+
         shapes.append(
             {
                 "type": "contour",
                 "contour": contour,
                 "area": area,
                 "approx_vertex_count": int(len(approx)),
+                "x": x,
+                "y": y,
+                "w": w,
+                "h": h,
+                "aspect_ratio": aspect_ratio,
+                "rectangularity": rectangularity,
+                "touches_border": touches_border,
+                "contour_index": i,
+                "parent_contour_index": parent_contour_index,
             }
         )
 
