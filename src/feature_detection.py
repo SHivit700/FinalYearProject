@@ -11,6 +11,7 @@ from features.label_area_ratio import compute_label_area_ratio
 from features.label_overlap import compute_label_overlap_metrics
 from features.label_readability import compute_label_readability
 from features.layout_structure_score import compute_layout_structure_score
+from features.isolated_box_detection import compute_isolated_box_metrics
 
 
 def extract_features_for_image(image_path: str, lang: str = "en") -> Dict[str, Any]:
@@ -66,6 +67,26 @@ def extract_features_for_image(image_path: str, lang: str = "en") -> Dict[str, A
         "container_utilization_score": _container_utilization["image_metrics"][
             "container_utilization_score"
         ],
+    }
+
+    island_detection_output_path = (
+        image_path.parent.parent
+        / "island_detection"
+        / f"island_detection_{image_path.stem}.png"
+    )
+    _island_result = compute_isolated_box_metrics(
+        bgr_image,
+        shapes,
+        image_shape,
+        output_path=str(island_detection_output_path),
+    )
+    features["isolated_boxes"] = {
+        "total_box_count": _island_result["total_box_count"],
+        "connected_count": _island_result["connected_count"],
+        "island_count": _island_result["island_count"],
+        "island_fraction": _island_result["island_fraction"],
+        "isolated_box_score": _island_result["isolated_box_score"],
+        "island_boxes": _island_result["island_boxes"],
     }
 
     return {
@@ -182,5 +203,15 @@ if __name__ == "__main__":
     print("---------------CONTAINER UTILIZATION------------------")
     cu_score = feats["container_utilization"]["container_utilization_score"]
     print(f"[ENTRY] container_utilization_score: {cu_score:.6f}")
+
+    print("---------------ISOLATED BOXES------------------")
+    ib = feats["isolated_boxes"]
+    print(
+        f"[ENTRY] isolated_box_score: {ib['isolated_box_score']} "
+        f"(islands={ib['island_count']}/{ib['total_box_count']}, "
+        f"island_fraction={ib['island_fraction']:.4f})"
+    )
+    for box in ib["island_boxes"]:
+        print(f"[ENTRY]   island box: x={box['x']} y={box['y']} w={box['w']} h={box['h']}")
 
     print("--------------------------------")
