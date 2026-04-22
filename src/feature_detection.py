@@ -12,9 +12,10 @@ from features.label_overlap import compute_label_overlap_metrics
 from features.label_readability import compute_label_readability
 from features.layout_structure_score import compute_layout_structure_score
 from features.isolated_box_detection import compute_isolated_box_metrics
+from features.brevity_score import compute_brevity_score
 
 
-def extract_features_for_image(image_path: str, lang: str = "en") -> Dict[str, Any]:
+def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: str = "system_design") -> Dict[str, Any]:
     """OCR and shape detection, then aggregate feature metrics into one dict."""
     image_path = Path(image_path)
     # Previews go next to the diagram tree (e.g. labels_output/, shapes_output/).
@@ -89,6 +90,8 @@ def extract_features_for_image(image_path: str, lang: str = "en") -> Dict[str, A
         "island_boxes": _island_result["island_boxes"],
     }
 
+    features["brevity"] = compute_brevity_score(labels, shapes, diagram_type=diagram_type)
+
     return {
         "image_path": str(image_path),
         "labels": labels,
@@ -110,6 +113,12 @@ if __name__ == "__main__":
         default="en",
         help="OCR language codes for EasyOCR (comma-separated)",
     )
+    parser.add_argument(
+        "--diagram-type",
+        default="system_design",
+        choices=["system_design", "timeline_roadmap"],
+        help="Diagram type — controls brevity score thresholds",
+    )
     args = parser.parse_args()
 
     path = Path(args.image_path)
@@ -118,7 +127,7 @@ if __name__ == "__main__":
     if not path.is_file():
         raise ValueError(f"Not a file: {path}")
 
-    result = extract_features_for_image(str(path), lang=args.lang)
+    result = extract_features_for_image(str(path), lang=args.lang, diagram_type=args.diagram_type)
 
     print("---------------IMAGE------------------")
     print(f"[ENTRY] Processed image: {result['image_path']}")
@@ -213,5 +222,28 @@ if __name__ == "__main__":
     )
     for box in ib["island_boxes"]:
         print(f"[ENTRY]   island box: x={box['x']} y={box['y']} w={box['w']} h={box['h']}")
+
+    print("---------------BREVITY------------------")
+    brev = feats["brevity"]
+    if brev["brevity_quality_score"] is None:
+        print("[ENTRY] brevity_quality_score: N/A (no valid labels)")
+    else:
+        conf_flag = " [low confidence: single label]" if brev["low_confidence"] else ""
+        print(
+            f"[ENTRY] brevity_quality_score: {brev['brevity_quality_score']:.2f}{conf_flag}"
+        )
+        print(
+            f"[ENTRY]   mean_chars={brev['mean_chars']} median={brev['median_chars']} "
+            f"p90={brev['p90_chars']} skewness={brev['skewness']}"
+        )
+        print(
+            f"[ENTRY]   verbose_ratio={brev['verbose_ratio']:.4f} "
+            f"paragraph_ratio={brev['paragraph_ratio']:.4f}"
+        )
+        lpb = brev["labels_per_box"]
+        print(
+            f"[ENTRY]   labels_per_box={'N/A' if lpb is None else f'{lpb:.2f}'} "
+            f"skipped_labels={brev['skipped_labels']}"
+        )
 
     print("--------------------------------")
