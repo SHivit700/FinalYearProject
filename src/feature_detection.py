@@ -14,6 +14,7 @@ from features.layout_structure_score import compute_layout_structure_score
 from features.isolated_box_detection import compute_isolated_box_metrics
 from features.brevity_score import compute_brevity_score
 from features.symmetry import compute_symmetry_score_from_diagram
+from features.whitespace_distribution import compute_whitespace_distribution_from_diagram
 
 
 def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: str = "system_design") -> Dict[str, Any]:
@@ -95,6 +96,10 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
 
     features["symmetry"] = compute_symmetry_score_from_diagram(
         labels, shapes, image_shape
+    )
+
+    features["whitespace_distribution"] = compute_whitespace_distribution_from_diagram(
+        labels, shapes, image_shape, bgr_image=bgr_image
     )
 
     return {
@@ -265,6 +270,23 @@ if __name__ == "__main__":
             f"vertical={sym['vertical_symmetry']:.2f} "
             f"dominant_axis={sym['dominant_axis']} "
             f"node_count={sym['node_count']}"
+        )
+
+    print("---------------WHITESPACE DISTRIBUTION------------------")
+    wds = feats["whitespace_distribution"]
+    if wds["whitespace_distribution_score"] is None:
+        print(f"[ENTRY] whitespace_distribution_score: N/A (low_confidence={wds['low_confidence']})")
+    else:
+        deg_flag = " [degenerate layout]" if wds["degenerate_layout"] else ""
+        print(
+            f"[ENTRY] whitespace_distribution_score: {wds['whitespace_distribution_score']:.2f}{deg_flag}"
+        )
+        print(
+            f"[ENTRY]   density_cov={wds['density_cov']:.4f} "
+            f"density_mean={wds['density_mean']:.4f} "
+            f"density_std={wds['density_std']:.4f} "
+            f"empty_cell_ratio={wds['empty_cell_ratio']:.4f} "
+            f"grid={wds['grid_resolution']}x{wds['grid_resolution']}"
         )
 
     print("--------------------------------")
