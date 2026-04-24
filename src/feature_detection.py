@@ -16,6 +16,7 @@ from features.brevity_score import compute_brevity_score
 from features.symmetry import compute_symmetry_score_from_diagram
 from features.whitespace_distribution import compute_whitespace_distribution_from_diagram
 from features.color_harmony import compute_color_harmony_score
+from features.cognitive_chunk_density import compute_cognitive_chunk_density_from_diagram
 
 
 def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: str = "system_design") -> Dict[str, Any]:
@@ -104,6 +105,10 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
     )
 
     features["color_harmony"] = compute_color_harmony_score(bgr_image, labels)
+
+    features["cognitive_chunk_density"] = compute_cognitive_chunk_density_from_diagram(
+        labels, shapes, image_shape
+    )
 
     return {
         "image_path": str(image_path),
@@ -318,5 +323,20 @@ if __name__ == "__main__":
             f"skipped_labels={chs['skipped_labels']}"
         )
         print(f"[ENTRY]   dominant_colors_hex={chs['dominant_colors_hex']}")
+
+    print("---------------COGNITIVE CHUNK DENSITY------------------")
+    ccd = feats["cognitive_chunk_density"]
+    if ccd["cognitive_chunk_score"] is None:
+        print(f"[ENTRY] cognitive_chunk_score: N/A (low_confidence={ccd['low_confidence']})")
+    else:
+        deg_flag = " [degenerate layout]" if ccd["degenerate_layout"] else ""
+        print(
+            f"[ENTRY] cognitive_chunk_score: {ccd['cognitive_chunk_score']:.2f}{deg_flag}"
+        )
+        print(
+            f"[ENTRY]   effective_chunks={ccd['effective_chunks']} "
+            f"(clusters={ccd['cluster_count']} singletons={ccd['singleton_count']}) "
+            f"eps_used={ccd['eps_used']:.1f}px"
+        )
 
     print("--------------------------------")
