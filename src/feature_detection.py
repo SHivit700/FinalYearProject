@@ -15,6 +15,7 @@ from features.isolated_box_detection import compute_isolated_box_metrics
 from features.brevity_score import compute_brevity_score
 from features.symmetry import compute_symmetry_score_from_diagram
 from features.whitespace_distribution import compute_whitespace_distribution_from_diagram
+from features.color_harmony import compute_color_harmony_score
 
 
 def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: str = "system_design") -> Dict[str, Any]:
@@ -101,6 +102,8 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
     features["whitespace_distribution"] = compute_whitespace_distribution_from_diagram(
         labels, shapes, image_shape, bgr_image=bgr_image
     )
+
+    features["color_harmony"] = compute_color_harmony_score(bgr_image, labels)
 
     return {
         "image_path": str(image_path),
@@ -288,5 +291,32 @@ if __name__ == "__main__":
             f"empty_cell_ratio={wds['empty_cell_ratio']:.4f} "
             f"grid={wds['grid_resolution']}x{wds['grid_resolution']}"
         )
+
+    print("---------------COLOR HARMONY------------------")
+    chs = feats["color_harmony"]
+    if chs["color_harmony_score"] is None:
+        print("[ENTRY] color_harmony_score: N/A (image read failure)")
+    else:
+        flags = []
+        if chs["monochrome"]:
+            flags.append("monochrome")
+        if chs["low_confidence"]:
+            flags.append("low confidence")
+        if chs["text_colors_unavailable"]:
+            flags.append("text colors unavailable")
+        if chs["contrast_violation"]:
+            flags.append("contrast violation")
+        flag_str = f" [{', '.join(flags)}]" if flags else ""
+        print(
+            f"[ENTRY] color_harmony_score: {chs['color_harmony_score']:.2f}{flag_str}"
+        )
+        print(
+            f"[ENTRY]   palette_size={chs['palette_size']} "
+            f"(bg={chs['background_palette_size']} text={chs['text_palette_size']}) "
+            f"harmony_ratio={chs['harmony_ratio']:.4f} "
+            f"palette_penalty={chs['palette_penalty']:.2f} "
+            f"skipped_labels={chs['skipped_labels']}"
+        )
+        print(f"[ENTRY]   dominant_colors_hex={chs['dominant_colors_hex']}")
 
     print("--------------------------------")
