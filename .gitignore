@@ -211,4 +211,5 @@ __marimo__/
 island_detection/
 labels_output/
 shapes_output/
+edge_detection/
 agents/

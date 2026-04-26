@@ -17,6 +17,7 @@ from features.symmetry import compute_symmetry_score_from_diagram
 from features.whitespace_distribution import compute_whitespace_distribution_from_diagram
 from features.color_harmony import compute_color_harmony_score
 from features.cognitive_chunk_density import compute_cognitive_chunk_density_from_diagram
+from features.edge_detection_visualization import compute_edge_detection_visualization
 
 
 def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: str = "system_design") -> Dict[str, Any]:
@@ -108,6 +109,19 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
 
     features["cognitive_chunk_density"] = compute_cognitive_chunk_density_from_diagram(
         labels, shapes, image_shape
+    )
+
+    edge_viz_output_path = (
+        image_path.parent.parent
+        / "edge_detection"
+        / f"edge_detection_{image_path.stem}.png"
+    )
+    features["edge_detection"] = compute_edge_detection_visualization(
+        bgr_image,
+        shapes,
+        image_shape,
+        labels=labels,
+        output_path=str(edge_viz_output_path),
     )
 
     return {
