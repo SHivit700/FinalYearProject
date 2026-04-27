@@ -19,6 +19,7 @@ from features.color_harmony import compute_color_harmony_score
 from features.cognitive_chunk_density import compute_cognitive_chunk_density_from_diagram
 from features.edge_detection_visualization import compute_edge_detection_visualization
 from features.label_contrast_quality import compute_label_contrast_quality
+from features.orientation_consistency import compute_orientation_consistency
 
 
 def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: str = "system_design") -> Dict[str, Any]:
@@ -113,6 +114,8 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
     features["cognitive_chunk_density"] = compute_cognitive_chunk_density_from_diagram(
         labels, shapes, image_shape
     )
+
+    features["orientation_consistency"] = compute_orientation_consistency(labels)
 
     edge_viz_output_path = (
         image_path.parent.parent
@@ -375,6 +378,22 @@ if __name__ == "__main__":
             f"[ENTRY]   effective_chunks={ccd['effective_chunks']} "
             f"(clusters={ccd['cluster_count']} singletons={ccd['singleton_count']}) "
             f"eps_used={ccd['eps_used']:.1f}px"
+        )
+
+    print("---------------ORIENTATION CONSISTENCY------------------")
+    oc = feats["orientation_consistency"]
+    if oc["orientation_consistency_score"] is None:
+        lc_flag = " [low confidence]" if oc["low_confidence"] else ""
+        print(f"[ENTRY] orientation_consistency_score: N/A{lc_flag} (scored_labels={oc['scored_labels']})")
+    else:
+        lc_flag = " [low confidence]" if oc["low_confidence"] else ""
+        print(
+            f"[ENTRY] orientation_consistency_score: {oc['orientation_consistency_score']:.2f}{lc_flag}"
+        )
+        print(
+            f"[ENTRY]   dominant_orientation={oc['dominant_orientation_deg']:.2f}° "
+            f"consistent_fraction={oc['consistent_label_fraction']:.4f} "
+            f"scored={oc['scored_labels']} skipped={oc['skipped_labels']}"
         )
 
     print("--------------------------------")
