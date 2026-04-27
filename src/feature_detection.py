@@ -18,6 +18,7 @@ from features.whitespace_distribution import compute_whitespace_distribution_fro
 from features.color_harmony import compute_color_harmony_score
 from features.cognitive_chunk_density import compute_cognitive_chunk_density_from_diagram
 from features.edge_detection_visualization import compute_edge_detection_visualization
+from features.label_contrast_quality import compute_label_contrast_quality
 
 
 def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: str = "system_design") -> Dict[str, Any]:
@@ -106,6 +107,8 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
     )
 
     features["color_harmony"] = compute_color_harmony_score(bgr_image, labels)
+
+    features["label_contrast"] = compute_label_contrast_quality(bgr_image, labels)
 
     features["cognitive_chunk_density"] = compute_cognitive_chunk_density_from_diagram(
         labels, shapes, image_shape
@@ -337,6 +340,27 @@ if __name__ == "__main__":
             f"skipped_labels={chs['skipped_labels']}"
         )
         print(f"[ENTRY]   dominant_colors_hex={chs['dominant_colors_hex']}")
+
+    print("---------------LABEL CONTRAST QUALITY------------------")
+    lcq = feats["label_contrast"]
+    if lcq["label_contrast_score"] is None:
+        print("[ENTRY] label_contrast_score: N/A (no labels)")
+    else:
+        harsh_flag = " [harsh contrast]" if lcq["harsh_contrast_flag"] else ""
+        print(
+            f"[ENTRY] label_contrast_score: {lcq['label_contrast_score']:.2f}{harsh_flag}"
+        )
+        print(
+            f"[ENTRY]   mean_delta_L={lcq['mean_delta_L']:.2f} "
+            f"min_delta_L={lcq['min_delta_L']:.2f} "
+            f"std_delta_L={lcq['std_delta_L']:.2f} "
+            f"mean_outline_ratio={lcq['mean_outline_ratio']:.4f} "
+            f"low_contrast_label_ratio={lcq['low_contrast_label_ratio']:.4f}"
+        )
+        if lcq["skipped_labels"]:
+            print(f"[ENTRY]   skipped_labels={lcq['skipped_labels']}")
+        if lcq["skipped_outline_count"]:
+            print(f"[ENTRY]   skipped_outline_count={lcq['skipped_outline_count']}")
 
     print("---------------COGNITIVE CHUNK DENSITY------------------")
     ccd = feats["cognitive_chunk_density"]
