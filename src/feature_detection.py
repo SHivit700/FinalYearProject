@@ -13,7 +13,6 @@ from features.label_readability import compute_label_readability
 from features.layout_structure_score import compute_layout_structure_score
 from features.isolated_box_detection import compute_isolated_box_metrics
 from features.brevity_score import compute_brevity_score
-from features.symmetry import compute_symmetry_score_from_diagram
 from features.whitespace_distribution import compute_whitespace_distribution_from_diagram
 from features.color_harmony import compute_color_harmony_score
 from features.cognitive_chunk_density import compute_cognitive_chunk_density_from_diagram
@@ -99,10 +98,6 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
     }
 
     features["brevity"] = compute_brevity_score(labels, shapes, diagram_type=diagram_type)
-
-    features["symmetry"] = compute_symmetry_score_from_diagram(
-        labels, shapes, image_shape
-    )
 
     features["whitespace_distribution"] = compute_whitespace_distribution_from_diagram(
         labels, shapes, image_shape, bgr_image=bgr_image
@@ -294,22 +289,6 @@ if __name__ == "__main__":
         print(
             f"[ENTRY]   labels_per_box={'N/A' if lpb is None else f'{lpb:.2f}'} "
             f"skipped_labels={brev['skipped_labels']}"
-        )
-
-    print("---------------SYMMETRY------------------")
-    sym = feats["symmetry"]
-    if sym["symmetry_score"] is None:
-        print(f"[ENTRY] symmetry_score: N/A (node_count={sym['node_count']})")
-    else:
-        conf_flag = " [low confidence: all nodes at centroid]" if sym["low_confidence"] else ""
-        print(
-            f"[ENTRY] symmetry_score: {sym['symmetry_score']:.2f}{conf_flag}"
-        )
-        print(
-            f"[ENTRY]   horizontal={sym['horizontal_symmetry']:.2f} "
-            f"vertical={sym['vertical_symmetry']:.2f} "
-            f"dominant_axis={sym['dominant_axis']} "
-            f"node_count={sym['node_count']}"
         )
 
     print("---------------WHITESPACE DISTRIBUTION------------------")

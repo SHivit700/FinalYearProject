@@ -14,8 +14,7 @@ from sklearn.cluster import DBSCAN
 logger = logging.getLogger(__name__)
 
 # Label clustering: labels within this fraction of canvas diagonal are merged
-# into one structural node. Mirrors the value used in symmetry.py so that both
-# metrics operate on the same effective node set.
+# into one structural node.
 _CLUSTER_FRACTION = 0.07
 
 _OPTIMAL_LOW_DEFAULT = 3
@@ -26,7 +25,7 @@ _MIN_SAMPLES_DEFAULT = 2
 
 
 # ---------------------------------------------------------------------------
-# Node-position helpers (mirrors symmetry.py to avoid cross-module coupling)
+# Node-position helpers
 # ---------------------------------------------------------------------------
 
 def _label_centres(labels: list[dict]) -> list[tuple[float, float]]:
@@ -205,8 +204,7 @@ def compute_cognitive_chunk_density_from_diagram(
 ) -> dict[str, Any]:
     """Convenience wrapper that derives node positions from OCR labels.
 
-    Node positions are obtained by clustering label centres (the same strategy
-    used by the Symmetry Score), which is more robust than shape detection
+    Node positions are obtained by clustering label centres, which is more robust than shape detection
     across diagram styles. Each cluster centroid is treated as a zero-size
     node box (x, y, 0, 0) so that compute_cognitive_chunk_density receives
     one position per structural node.
