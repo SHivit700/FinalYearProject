@@ -164,6 +164,7 @@ def compute_label_contrast_quality(
         "mean_outline_ratio": None,
         "low_contrast_label_ratio": None,
         "per_label_delta_L": [],
+        "per_label_info": [],
         "harsh_contrast_flag": False,
         "skipped_labels": 0,
         "skipped_outline_count": 0,
@@ -184,6 +185,7 @@ def compute_label_contrast_quality(
 
     delta_L_values: list[float] = []
     outline_ratios: list[float] = []
+    per_label_info: list[dict] = []
     skipped = 0
     skipped_outline = 0
 
@@ -214,6 +216,7 @@ def compute_label_contrast_quality(
 
         delta_L = abs(L_text - L_background)
         delta_L_values.append(delta_L)
+        per_label_info.append({"x1": x1, "y1": y1, "x2": x2, "y2": y2, "delta_L": delta_L, "bbox": bbox})
 
         # --- Outline detection (skip tiny boxes) ---
         box_area = (x2 - x1) * (y2 - y1)
@@ -273,6 +276,7 @@ def compute_label_contrast_quality(
         "mean_outline_ratio": round(mean_outline, 4),
         "low_contrast_label_ratio": round(low_contrast_ratio, 4),
         "per_label_delta_L": [round(d, 4) for d in delta_L_values],
+        "per_label_info": per_label_info,
         "harsh_contrast_flag": harsh_flag,
         "skipped_labels": skipped,
         "skipped_outline_count": skipped_outline,

@@ -19,6 +19,7 @@ from features.color_harmony import compute_color_harmony_score
 from features.cognitive_chunk_density import compute_cognitive_chunk_density_from_diagram
 from features.edge_detection_visualization import compute_edge_detection_visualization
 from features.label_contrast_quality import compute_label_contrast_quality
+from features.label_contrast_quality_visualization import compute_label_contrast_visualization
 from features.orientation_consistency import compute_orientation_consistency
 
 
@@ -110,6 +111,17 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
     features["color_harmony"] = compute_color_harmony_score(bgr_image, labels)
 
     features["label_contrast"] = compute_label_contrast_quality(bgr_image, labels)
+
+    label_contrast_viz_path = (
+        image_path.parent.parent
+        / "label contrast quality detection"
+        / f"label_contrast_{image_path.stem}.png"
+    )
+    compute_label_contrast_visualization(
+        bgr_image,
+        features["label_contrast"],
+        output_path=str(label_contrast_viz_path),
+    )
 
     features["cognitive_chunk_density"] = compute_cognitive_chunk_density_from_diagram(
         labels, shapes, image_shape
