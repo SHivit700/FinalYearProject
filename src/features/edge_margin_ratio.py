@@ -62,6 +62,7 @@ def compute_edge_margin_metrics(
 
     label_violations = 0
     n_lab = 0
+    per_label_violations: List[Dict[str, Any]] = []
     for item in labels:
         box = _label_aabb(item)
         if box is None:
@@ -70,9 +71,14 @@ def compute_edge_margin_metrics(
         x1, y1, x2, y2 = box
         if _min_clearance_to_edges(x1, y1, x2, y2, width, height) < margin_px:
             label_violations += 1
+            per_label_violations.append({
+                "x1": int(x1), "y1": int(y1), "x2": int(x2), "y2": int(y2),
+                "bbox": item.get("bbox", []),
+            })
 
     shape_violations = 0
     n_shp = 0
+    per_shape_violations: List[Dict[str, Any]] = []
     for s in shapes:
         cnt = s.get("contour")
         if cnt is None:
@@ -81,13 +87,15 @@ def compute_edge_margin_metrics(
         x1, y1, x2, y2 = _contour_aabb(cnt)
         if _min_clearance_to_edges(x1, y1, x2, y2, width, height) < margin_px:
             shape_violations += 1
+            per_shape_violations.append({
+                "x1": int(x1), "y1": int(y1), "x2": int(x2), "y2": int(y2),
+            })
 
     return {
         "feature_name": "edge_clearance",
-        # Minimum clearance as a fraction of the shorter side. 
         "margin_fraction": float(margin_fraction),
-        # Proportion of OCR labels (with bbox) closer than margin_px to some image edge.
         "labels_fraction_violating": label_violations / n_lab if n_lab else -100.0,
-        # Proportion of detected contours (with contour array) closer than margin_px to some edge.
         "shapes_fraction_violating": shape_violations / n_shp if n_shp else -100.0,
+        "per_label_violations": per_label_violations,
+        "per_shape_violations": per_shape_violations,
     }

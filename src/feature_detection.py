@@ -19,6 +19,7 @@ from features.cognitive_chunk_density import compute_cognitive_chunk_density_fro
 from features.edge_detection_visualization import compute_edge_detection_visualization
 from features.label_contrast_quality import compute_label_contrast_quality
 from features.label_contrast_quality_visualization import compute_label_contrast_visualization
+from features.edge_clearance_visualization import compute_edge_clearance_visualization
 from features.orientation_consistency import compute_orientation_consistency
 
 
@@ -62,6 +63,18 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
     features["edge_clearance"] = compute_edge_margin_metrics(
         labels, shapes, image_shape, margin_fraction=margin_fraction
     )
+
+    edge_clearance_viz_path = (
+        image_path.parent.parent
+        / "edge clearance detection"
+        / f"edge_clearance_{image_path.stem}.png"
+    )
+    compute_edge_clearance_visualization(
+        bgr_image,
+        features["edge_clearance"],
+        output_path=str(edge_clearance_viz_path),
+    )
+
     features["layout_structure"] = compute_layout_structure_score(shapes, image_shape)
     features["font_hierarchy"] = compute_font_hierarchy_metrics(labels)
     _container_utilization = compute_container_utilization_metrics(
@@ -225,11 +238,11 @@ if __name__ == "__main__":
         f"(max_fraction_ok={label_readability['max_fraction_below_threshold']:.4f}), "
         f"status={label_readability['readability_status']}"
     )
-    for row in label_readability["labels_below_threshold_details"]:
-        print(
-            f"[ENTRY]   low-confidence label #{row['index']}: "
-            f"{row['text']!r} conf={row['confidence']:.4f}"
-        )
+    # for row in label_readability["labels_below_threshold_details"]:
+    #     print(
+    #         f"[ENTRY]   low-confidence label #{row['index']}: "
+    #         f"{row['text']!r} conf={row['confidence']:.4f}"
+        # )
 
     print("---------------LAYOUT STRUCTURE (ML)------------------")
     layout = feats["layout_structure"]
