@@ -21,6 +21,88 @@ from features.label_contrast_quality import compute_label_contrast_quality
 from features.label_contrast_quality_visualization import compute_label_contrast_visualization
 from features.edge_clearance_visualization import compute_edge_clearance_visualization
 from features.orientation_consistency import compute_orientation_consistency
+from features.orientation_consistency_visualization import compute_orientation_consistency_visualization
+
+
+def _augment_labels_with_tilted_shapes(labels: list, shapes: list) -> list:
+    """Return labels plus synthetic entries for tilted shapes with no OCR coverage.
+
+    A shape is "tilted" when its minAreaRect angle is not near 0° or -90°.
+    A shape is "covered" when an existing OCR label sits mostly inside it
+    (intersection / label_area > 50 %).  Uncovered tilted shapes get a
+    synthetic label whose bbox uses the minAreaRect corners — this gives a
+    non-zero dy so _label_angle_deg can compute the true rotation angle.
+    """
+    import cv2
+
+    _MIN_SHAPE_AREA = 2000   # px² — ignore tiny noise contours
+    _TILT_LO, _TILT_HI = -75.0, -15.0   # minAreaRect angles considered "tilted"
+    _COVERED_THRESH = 0.50   # fraction of label area that must overlap the shape
+
+    label_aabbs = []
+    for lbl in labels:
+        bbox = lbl.get("bbox", [])
+        if not bbox:
+            continue
+        xs = [p[0] for p in bbox]
+        ys = [p[1] for p in bbox]
+        label_aabbs.append((min(xs), min(ys), max(xs), max(ys)))
+
+    augmented = list(labels)
+
+    for shape in shapes:
+        cnt = shape.get("contour")
+        if cnt is None:
+            continue
+
+        rect = cv2.minAreaRect(cnt)
+        (_, _), (w, h), angle = rect
+
+        if w * h < _MIN_SHAPE_AREA:
+            continue
+        if not (_TILT_LO < angle < _TILT_HI):
+            continue
+
+        sx, sy, srw, srh = cv2.boundingRect(cnt)
+        sx1, sy1, sx2, sy2 = sx, sy, sx + srw, sy + srh
+
+        covered = False
+        for lx1, ly1, lx2, ly2 in label_aabbs:
+            ix1, iy1 = max(sx1, lx1), max(sy1, ly1)
+            ix2, iy2 = min(sx2, lx2), min(sy2, ly2)
+            if ix2 <= ix1 or iy2 <= iy1:
+                continue
+            inter = (ix2 - ix1) * (iy2 - iy1)
+            label_area = max(1, (lx2 - lx1) * (ly2 - ly1))
+            if inter / label_area > _COVERED_THRESH:
+                covered = True
+                break
+
+        if covered:
+            continue
+
+        # Build [TL, TR, BR, BL] from the four minAreaRect corners so that
+        # bbox[3]→bbox[2] is the bottom edge with the correct rotation dy.
+        box_pts = cv2.boxPoints(rect).tolist()
+        box_pts_s = sorted(box_pts, key=lambda p: p[1])
+        top = sorted(box_pts_s[:2], key=lambda p: p[0])
+        bottom = sorted(box_pts_s[2:], key=lambda p: p[0])
+        tl, tr = top
+        bl, br = bottom
+        bbox = [tl, tr, br, bl]
+
+        augmented.append({
+            "bbox": bbox,
+            "text": "",
+            "confidence": 0.0,
+            "width": float(w),
+            "height": float(h),
+        })
+        # Treat the newly added synthetic label as coverage so that inner/outer
+        # duplicate contours of the same shape don't both produce an entry.
+        label_aabbs.append((sx1, sy1, sx2, sy2))
+
+    return augmented
 
 
 def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: str = "system_design") -> Dict[str, Any]:
@@ -135,7 +217,19 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
         labels, shapes, image_shape
     )
 
-    features["orientation_consistency"] = compute_orientation_consistency(labels)
+    _oc_labels = _augment_labels_with_tilted_shapes(labels, shapes)
+    features["orientation_consistency"] = compute_orientation_consistency(_oc_labels)
+
+    orientation_viz_path = (
+        image_path.parent.parent
+        / "orientation consistency detection"
+        / f"orientation_consistency_{image_path.stem}.png"
+    )
+    compute_orientation_consistency_visualization(
+        bgr_image,
+        features["orientation_consistency"],
+        output_path=str(orientation_viz_path),
+    )
 
     edge_viz_output_path = (
         image_path.parent.parent

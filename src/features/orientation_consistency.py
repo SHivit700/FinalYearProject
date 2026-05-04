@@ -171,6 +171,7 @@ def compute_orientation_consistency(
 
     angles: list[float] = []
     skipped = 0
+    label_angle_pairs: list[tuple[dict, float]] = []
 
     for lbl in labels:
         angle = _label_angle_deg(lbl.get("bbox", []))
@@ -178,6 +179,7 @@ def compute_orientation_consistency(
             skipped += 1
         else:
             angles.append(angle)
+            label_angle_pairs.append((lbl, angle))
 
     _null["skipped_labels"] = skipped
     _null["scored_labels"] = len(angles)
@@ -192,9 +194,26 @@ def compute_orientation_consistency(
 
     dominant = _dominant_orientation(angles)
 
-    consistent_count = sum(
-        1 for a in angles if _angular_distance(a, dominant) <= consistency_window
-    )
+    per_label_info: list[dict] = []
+    consistent_count = 0
+    for lbl, angle in label_angle_pairs:
+        is_consistent = _angular_distance(angle, dominant) <= consistency_window
+        if is_consistent:
+            consistent_count += 1
+        bbox = lbl.get("bbox", [])
+        xs = [float(p[0]) for p in bbox] if bbox else []
+        ys = [float(p[1]) for p in bbox] if bbox else []
+        per_label_info.append({
+            "bbox": bbox,
+            "text": lbl.get("text", ""),
+            "angle_deg": round(angle, 4),
+            "consistent": is_consistent,
+            "x1": int(min(xs)) if xs else 0,
+            "y1": int(min(ys)) if ys else 0,
+            "x2": int(max(xs)) if xs else 0,
+            "y2": int(max(ys)) if ys else 0,
+        })
+
     consistent_fraction = consistent_count / len(angles)
     inconsistent_fraction = 1.0 - consistent_fraction
 
@@ -208,4 +227,5 @@ def compute_orientation_consistency(
         "scored_labels": len(angles),
         "skipped_labels": skipped,
         "low_confidence": len(angles) < _MIN_LABELS,
+        "per_label_info": per_label_info,
     }
