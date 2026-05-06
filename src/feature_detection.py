@@ -24,6 +24,7 @@ from features.label_readability_visualization import compute_label_readability_v
 from features.label_overlap_visualization import compute_label_overlap_visualization
 from features.orientation_consistency import compute_orientation_consistency
 from features.orientation_consistency_visualization import compute_orientation_consistency_visualization
+from features.brevity_visualization import compute_brevity_visualization
 
 
 def _augment_labels_with_tilted_shapes(labels: list, shapes: list) -> list:
@@ -200,8 +201,8 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
 
     island_detection_output_path = (
         image_path.parent.parent
-        / "island_detection"
-        / f"island_detection_{image_path.stem}.png"
+        / "isolated box detection"
+        / f"isolated_box_{image_path.stem}.png"
     )
     _island_result = compute_isolated_box_metrics(
         bgr_image,
@@ -219,6 +220,18 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
     }
 
     features["brevity"] = compute_brevity_score(labels, shapes, diagram_type=diagram_type)
+
+    brevity_viz_path = (
+        image_path.parent.parent
+        / "brevity detection"
+        / f"brevity_{image_path.stem}.png"
+    )
+    compute_brevity_visualization(
+        bgr_image,
+        features["brevity"],
+        output_path=str(brevity_viz_path),
+        shapes=shapes,
+    )
 
     features["whitespace_distribution"] = compute_whitespace_distribution_from_diagram(
         labels, shapes, image_shape, bgr_image=bgr_image

@@ -208,7 +208,7 @@ __marimo__/
 
 .DS_Store
 
-island_detection/
+isolated box detection/
 labels_output/
 shapes_output/
 edge_detection/
@@ -218,3 +218,4 @@ edge clearance detection/
 orientation consistency detection/
 label readability detection/
 label overlap detection/
+brevity detection/

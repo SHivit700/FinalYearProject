@@ -101,6 +101,7 @@ def compute_brevity_score(
 
     # ── 1. Extract and validate text strings ─────────────────────────────────
     valid_texts: List[str] = []
+    valid_label_dicts: List[Dict[str, Any]] = []
     skipped = 0
     for item in labels:
         if not isinstance(item, dict):
@@ -115,6 +116,7 @@ def compute_brevity_score(
             skipped += 1
             continue
         valid_texts.append(stripped)
+        valid_label_dicts.append(item)
 
     if skipped:
         logger.debug("compute_brevity_score: skipped %d invalid/empty labels.", skipped)
@@ -132,6 +134,7 @@ def compute_brevity_score(
             "labels_per_box": None,
             "skipped_labels": skipped,
             "low_confidence": True,
+            "per_label_info": [],
         }
 
     low_confidence = len(valid_texts) == 1
@@ -162,21 +165,50 @@ def compute_brevity_score(
             box_count = max(1, len(shapes) // 3)
         labels_per_box = n / box_count
 
-    # ── 5. Scoring formula (start at 100, apply anchored penalties) ───────────
-    score = 100.0
-
-    score -= min(T["mean_cap"], max(0.0, (mean_chars - T["mean_threshold"]) * T["mean_weight"]))
-    score -= min(T["p90_cap"], max(0.0, (p90_chars - T["p90_threshold"]) * T["p90_weight"]))
-    score -= verbose_ratio * T["verbose_penalty"]
-    score -= paragraph_ratio * T["paragraph_penalty"]
-
+    # ── 5. Scoring formula — capture each penalty individually ───────────────
+    penalty_mean = min(T["mean_cap"], max(0.0, (mean_chars - T["mean_threshold"]) * T["mean_weight"]))
+    penalty_p90 = min(T["p90_cap"], max(0.0, (p90_chars - T["p90_threshold"]) * T["p90_weight"]))
+    penalty_verbose = verbose_ratio * T["verbose_penalty"]
+    penalty_paragraph = paragraph_ratio * T["paragraph_penalty"]
+    penalty_density = 0.0
     if labels_per_box is not None:
-        score -= min(
+        penalty_density = min(
             T["density_cap"],
             max(0.0, (labels_per_box - T["density_threshold"]) * T["density_weight"]),
         )
 
-    score = max(0.0, score)
+    score = max(0.0, 100.0 - penalty_mean - penalty_p90 - penalty_verbose - penalty_paragraph - penalty_density)
+
+    # ── 6. Per-label info for visualization ───────────────────────────────────
+    per_label_info: List[Dict[str, Any]] = []
+    for i, (lbl_dict, text, cc, wc) in enumerate(
+        zip(valid_label_dicts, valid_texts, char_counts, word_counts)
+    ):
+        bbox = lbl_dict.get("bbox", [])
+        if bbox:
+            xs = [p[0] for p in bbox]
+            ys = [p[1] for p in bbox]
+            x1, y1, x2, y2 = int(min(xs)), int(min(ys)), int(max(xs)), int(max(ys))
+        else:
+            x1 = y1 = x2 = y2 = 0
+        is_verbose = bool(cc > T["verbose_threshold_chars"])
+        is_paragraph = bool(wc > T["paragraph_threshold_words"])
+        above_mean = bool(cc > T["mean_threshold"])
+        per_label_info.append({
+            "index": i,
+            "text": text,
+            "char_count": int(cc),
+            "word_count": int(wc),
+            "above_mean_threshold": above_mean,
+            "is_verbose": is_verbose,
+            "is_paragraph": is_paragraph,
+            "violates_brevity": is_verbose or is_paragraph,
+            "bbox": bbox,
+            "x1": x1,
+            "y1": y1,
+            "x2": x2,
+            "y2": y2,
+        })
 
     return {
         "brevity_quality_score": round(score, 2),
@@ -189,4 +221,18 @@ def compute_brevity_score(
         "labels_per_box": round(labels_per_box, 2) if labels_per_box is not None else None,
         "skipped_labels": skipped,
         "low_confidence": low_confidence,
+        "per_label_info": per_label_info,
+        "score_breakdown": {
+            "penalty_mean": round(penalty_mean, 2),
+            "penalty_p90": round(penalty_p90, 2),
+            "penalty_verbose": round(penalty_verbose, 2),
+            "penalty_paragraph": round(penalty_paragraph, 2),
+            "penalty_density": round(penalty_density, 2),
+        },
+        "thresholds_used": {
+            "mean_threshold": T["mean_threshold"],
+            "verbose_threshold_chars": T["verbose_threshold_chars"],
+            "paragraph_threshold_words": T["paragraph_threshold_words"],
+            "density_threshold": T["density_threshold"],
+        },
     }
