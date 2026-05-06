@@ -127,6 +127,7 @@ def compute_label_overlap_metrics(
     m = len(aabbs)
     normalised_gaps: List[float] = []
     too_close_label_indices: set = set()
+    iou_overlap_label_indices: set = set()
     too_close_pairs: int = 0
     total_pairs: int = m * (m - 1) // 2
     iou_overlap_pairs: int = 0
@@ -159,6 +160,8 @@ def compute_label_overlap_metrics(
             # IoU > 0 → literal overlap
             if iou > 0.0:
                 iou_overlap_pairs += 1
+                iou_overlap_label_indices.add(i)
+                iou_overlap_label_indices.add(j)
                 too_close_label_indices.add(i)
                 too_close_label_indices.add(j)
 
@@ -185,10 +188,24 @@ def compute_label_overlap_metrics(
     if fraction_pairs_any_iou > THRESHOLDS["fraction_pairs_any_iou_crowded"]:
         spacing_verdict = "crowded labels"
 
+    # Build per-label info for visualization
+    per_label_info: List[Dict[str, Any]] = []
+    for aabb_idx in too_close_label_indices:
+        src_idx = indices_with_bbox[aabb_idx]
+        lbl = labels[src_idx]
+        x1, y1, x2, y2 = aabbs[aabb_idx]
+        per_label_info.append({
+            "bbox": lbl.get("bbox", []),
+            "x1": int(x1), "y1": int(y1), "x2": int(x2), "y2": int(y2),
+            "text": lbl.get("text", ""),
+            "has_iou_overlap": aabb_idx in iou_overlap_label_indices,
+        })
+
     return {
         "fraction_labels_too_close": fraction_labels_too_close,
         "mean_normalised_gap": mean_ng,
         "fraction_pairs_too_close": fraction_pairs_too_close,
         "fraction_pairs_any_iou": fraction_pairs_any_iou,
         "spacing_verdict": spacing_verdict,
+        "per_label_info": per_label_info,
     }

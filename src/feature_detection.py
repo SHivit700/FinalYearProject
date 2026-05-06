@@ -21,6 +21,7 @@ from features.label_contrast_quality import compute_label_contrast_quality
 from features.label_contrast_quality_visualization import compute_label_contrast_visualization
 from features.edge_clearance_visualization import compute_edge_clearance_visualization
 from features.label_readability_visualization import compute_label_readability_visualization
+from features.label_overlap_visualization import compute_label_overlap_visualization
 from features.orientation_consistency import compute_orientation_consistency
 from features.orientation_consistency_visualization import compute_orientation_consistency_visualization
 
@@ -155,6 +156,18 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
     )
 
     features["overlap_metrics"] = compute_label_overlap_metrics(labels, image_shape)
+
+    label_overlap_viz_path = (
+        image_path.parent.parent
+        / "label overlap detection"
+        / f"label_overlap_{image_path.stem}.png"
+    )
+    compute_label_overlap_visualization(
+        bgr_image,
+        features["overlap_metrics"],
+        output_path=str(label_overlap_viz_path),
+    )
+
     features["edge_clearance"] = compute_edge_margin_metrics(
         labels, shapes, image_shape, margin_fraction=margin_fraction
     )
