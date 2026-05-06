@@ -20,6 +20,7 @@ from features.edge_detection_visualization import compute_edge_detection_visuali
 from features.label_contrast_quality import compute_label_contrast_quality
 from features.label_contrast_quality_visualization import compute_label_contrast_visualization
 from features.edge_clearance_visualization import compute_edge_clearance_visualization
+from features.label_readability_visualization import compute_label_readability_visualization
 from features.orientation_consistency import compute_orientation_consistency
 from features.orientation_consistency_visualization import compute_orientation_consistency_visualization
 
@@ -141,6 +142,18 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
 
     features["label_area"] = compute_label_area_ratio(labels, image_shape)
     features["label_readability"] = compute_label_readability(labels)
+
+    label_readability_viz_path = (
+        image_path.parent.parent
+        / "label readability detection"
+        / f"label_readability_{image_path.stem}.png"
+    )
+    compute_label_readability_visualization(
+        bgr_image,
+        features["label_readability"],
+        output_path=str(label_readability_viz_path),
+    )
+
     features["overlap_metrics"] = compute_label_overlap_metrics(labels, image_shape)
     features["edge_clearance"] = compute_edge_margin_metrics(
         labels, shapes, image_shape, margin_fraction=margin_fraction
