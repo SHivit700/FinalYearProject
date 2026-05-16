@@ -18,3 +18,7 @@ shapely>=2.0.0
 # batch_rate_images.py (OpenAI vision ratings)
 openai>=1.0.0
 python-dotenv>=1.0.0
+
+# Streamlit GUI
+streamlit>=1.35.0
+plotly>=5.0.0

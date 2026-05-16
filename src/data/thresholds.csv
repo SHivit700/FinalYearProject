@@ -1,0 +1,14 @@
+metric,critical_threshold,warning_threshold,learning_rate,update_count
+label_readability,,,0.10,0
+label_area,,,0.10,0
+overlap_metrics,,,0.10,0
+edge_clearance,,,0.10,0
+font_hierarchy,,80.0000,0.10,0
+container_utilization,65.0000,90.0000,0.10,0
+isolated_boxes,60.0000,70.0000,0.10,0
+brevity,60.0000,69.0000,0.10,1
+whitespace_distribution,50.0000,80.0000,0.10,0
+color_harmony,40.0000,60.0000,0.10,0
+label_contrast,,90.0000,0.10,0
+cognitive_chunk_density,50.0000,90.0000,0.10,0
+orientation_consistency,50.0000,79.1430,0.10,1

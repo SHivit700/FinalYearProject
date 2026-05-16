@@ -17,6 +17,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import threshold_manager
+
 logger = logging.getLogger(__name__)
 
 _PROJECT_ROOT = Path(__file__).parent.parent
@@ -286,7 +288,9 @@ def generate_rule_based_suggestions(
     if isinstance(fh, dict):
         fsb = fh.get("font_score_breakdown")
         font_score = fsb.get("font_score") if fsb else None
-        if font_score is not None and font_score < 80:
+        _fh_t = threshold_manager.get_thresholds("font_hierarchy")
+        _fh_warn = _fh_t.get("warning_threshold")
+        if font_score is not None and _fh_warn is not None and font_score < _fh_warn:
             _add(
                 "font_hierarchy", "warning", font_score,
                 f"Font hierarchy score is {font_score:.1f}/100 — insufficient size contrast between label levels.",
@@ -301,14 +305,17 @@ def generate_rule_based_suggestions(
     if isinstance(cu, dict):
         cu_score = cu.get("container_utilization_score")
         if cu_score is not None:
-            if cu_score < 65:
+            _cu_t = threshold_manager.get_thresholds("container_utilization")
+            _cu_crit = _cu_t.get("critical_threshold")
+            _cu_warn = _cu_t.get("warning_threshold")
+            if _cu_crit is not None and cu_score < _cu_crit:
                 _add(
                     "container_utilization", "critical", cu_score,
                     f"Container utilization is very low ({cu_score:.1f}/100). Boxes are significantly under-used.",
                     [],
                     "Add more content to containers, merge near-empty boxes, or remove unused containers.",
                 )
-            elif cu_score < 90:
+            elif _cu_warn is not None and cu_score < _cu_warn:
                 _add(
                     "container_utilization", "warning", cu_score,
                     f"Container utilization is below optimal ({cu_score:.1f}/100). Some regions are sparse.",
@@ -334,7 +341,10 @@ def generate_rule_based_suggestions(
                 }
                 for b in ib.get("island_boxes", [])
             ]
-            if ib_score < 60:
+            _ib_t = threshold_manager.get_thresholds("isolated_boxes")
+            _ib_crit = _ib_t.get("critical_threshold")
+            _ib_warn = _ib_t.get("warning_threshold")
+            if _ib_crit is not None and ib_score < _ib_crit:
                 _add(
                     "isolated_boxes", "critical", ib_score,
                     f"{island_count} box(es) have no connector lines (score={ib_score}/100). "
@@ -342,7 +352,7 @@ def generate_rule_based_suggestions(
                     locs,
                     "Draw connector arrows or lines between isolated elements and the rest of the diagram.",
                 )
-            elif ib_score < 70:
+            elif _ib_warn is not None and ib_score < _ib_warn:
                 _add(
                     "isolated_boxes", "warning", ib_score,
                     f"{island_count} box(es) appear disconnected from the rest of the diagram.",
@@ -368,7 +378,10 @@ def generate_rule_based_suggestions(
                 for p in verbose_labels
                 if p.get("x1") is not None
             ]
-            if brev_score < 60:
+            _brev_t = threshold_manager.get_thresholds("brevity")
+            _brev_crit = _brev_t.get("critical_threshold")
+            _brev_warn = _brev_t.get("warning_threshold")
+            if _brev_crit is not None and brev_score < _brev_crit:
                 _add(
                     "brevity", "critical", brev_score,
                     f"Many labels are excessively long (score={brev_score:.1f}/100, "
@@ -376,7 +389,7 @@ def generate_rule_based_suggestions(
                     locs,
                     "Shorten labels to concise identifiers. Move detail to tooltips or a legend.",
                 )
-            elif brev_score < 70:
+            elif _brev_warn is not None and brev_score < _brev_warn:
                 _add(
                     "brevity", "warning", brev_score,
                     f"Some labels exceed recommended length (score={brev_score:.1f}/100).",
@@ -394,7 +407,10 @@ def generate_rule_based_suggestions(
         wds_score = wds.get("whitespace_distribution_score")
         if wds_score is not None:
             cov = wds.get("density_cov", 0.0)
-            if wds_score < 50:
+            _wds_t = threshold_manager.get_thresholds("whitespace_distribution")
+            _wds_crit = _wds_t.get("critical_threshold")
+            _wds_warn = _wds_t.get("warning_threshold")
+            if _wds_crit is not None and wds_score < _wds_crit:
                 _add(
                     "whitespace_distribution", "critical", wds_score,
                     f"Whitespace is very unevenly distributed (score={wds_score:.1f}/100, CoV={cov:.2f}). "
@@ -402,7 +418,7 @@ def generate_rule_based_suggestions(
                     [],
                     "Redistribute elements to create consistent spacing across the diagram.",
                 )
-            elif wds_score < 80:
+            elif _wds_warn is not None and wds_score < _wds_warn:
                 _add(
                     "whitespace_distribution", "warning", wds_score,
                     f"Whitespace distribution is uneven (score={wds_score:.1f}/100, CoV={cov:.2f}).",
@@ -422,14 +438,17 @@ def generate_rule_based_suggestions(
             palette_size = chs.get("palette_size", 0)
             palette = chs.get("dominant_colors_hex", [])
             detail = f"palette_size={palette_size}, colors={palette[:5]}"
-            if ch_score < 40:
+            _ch_t = threshold_manager.get_thresholds("color_harmony")
+            _ch_crit = _ch_t.get("critical_threshold")
+            _ch_warn = _ch_t.get("warning_threshold")
+            if _ch_crit is not None and ch_score < _ch_crit:
                 _add(
                     "color_harmony", "critical", ch_score,
                     f"Color harmony is poor (score={ch_score:.1f}/100, {detail}).",
                     [],
                     "Reduce distinct colors and choose a harmonious palette (analogous or complementary scheme).",
                 )
-            elif ch_score < 60:
+            elif _ch_warn is not None and ch_score < _ch_warn:
                 _add(
                     "color_harmony", "warning", ch_score,
                     f"Color harmony could be improved (score={ch_score:.1f}/100, {detail}).",
@@ -458,7 +477,9 @@ def generate_rule_based_suggestions(
                 for p in low_contrast
                 if p.get("x1") is not None
             ]
-            if lc_score < 90:
+            _lc_t = threshold_manager.get_thresholds("label_contrast")
+            _lc_warn = _lc_t.get("warning_threshold")
+            if _lc_warn is not None and lc_score < _lc_warn:
                 _add(
                     "label_contrast", "warning", lc_score,
                     f"Label contrast score is {lc_score:.1f}/100. "
@@ -478,7 +499,10 @@ def generate_rule_based_suggestions(
         cc_score = ccd.get("cognitive_chunk_score")
         if cc_score is not None:
             chunks = ccd.get("effective_chunks", "?")
-            if cc_score < 50:
+            _cc_t = threshold_manager.get_thresholds("cognitive_chunk_density")
+            _cc_crit = _cc_t.get("critical_threshold")
+            _cc_warn = _cc_t.get("warning_threshold")
+            if _cc_crit is not None and cc_score < _cc_crit:
                 _add(
                     "cognitive_chunk_density", "critical", cc_score,
                     f"Cognitive chunk density is very high (score={cc_score:.1f}/100, effective_chunks={chunks}). "
@@ -486,7 +510,7 @@ def generate_rule_based_suggestions(
                     [],
                     "Break the diagram into sub-diagrams, group related elements, or reduce total element count.",
                 )
-            elif cc_score < 90:
+            elif _cc_warn is not None and cc_score < _cc_warn:
                 _add(
                     "cognitive_chunk_density", "warning", cc_score,
                     f"Cognitive load is elevated (score={cc_score:.1f}/100, effective_chunks={chunks}).",
@@ -505,7 +529,10 @@ def generate_rule_based_suggestions(
         if oc_score is not None:
             dom_deg = oc.get("dominant_orientation_deg", 0.0)
             frac = oc.get("consistent_label_fraction", 0.0)
-            if oc_score < 50:
+            _oc_t = threshold_manager.get_thresholds("orientation_consistency")
+            _oc_crit = _oc_t.get("critical_threshold")
+            _oc_warn = _oc_t.get("warning_threshold")
+            if _oc_crit is not None and oc_score < _oc_crit:
                 _add(
                     "orientation_consistency", "critical", oc_score,
                     f"Label orientation is highly inconsistent (score={oc_score:.1f}/100). "
@@ -513,7 +540,7 @@ def generate_rule_based_suggestions(
                     [],
                     "Align all labels to a single orientation (preferably 0° horizontal). Avoid mixing horizontal and rotated text.",
                 )
-            elif oc_score < 80:
+            elif _oc_warn is not None and oc_score < _oc_warn:
                 _add(
                     "orientation_consistency", "warning", oc_score,
                     f"Some labels deviate from the dominant orientation (score={oc_score:.1f}/100, "
