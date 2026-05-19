@@ -202,8 +202,17 @@ def generate_rule_based_suggestions(
                         "x2": int(max(xs)), "y2": int(max(ys)),
                         "detail": f"text={det.get('text', '')!r} conf={det.get('confidence', 0):.3f}",
                     })
+            _lr_t = threshold_manager.get_thresholds("label_readability")
+            _lr_crit = _lr_t.get("critical_threshold")
+            _lr_warn = _lr_t.get("warning_threshold")
+            if score is not None and _lr_crit is not None and score < _lr_crit:
+                lr_sev = "critical"
+            elif score is not None and _lr_warn is not None and score < _lr_warn:
+                lr_sev = "warning"
+            else:
+                lr_sev = "warning"
             _add(
-                "label_readability", "warning", score,
+                "label_readability", lr_sev, score,
                 f"Low OCR confidence on {lr.get('labels_below_threshold', 0)} label(s) "
                 f"(fraction_below={lr.get('fraction_labels_below_threshold', 0):.2f}). "
                 "Text may be too small, blurry, or have poor contrast.",
@@ -223,8 +232,17 @@ def generate_rule_based_suggestions(
         except Exception:
             cat, ratio = "balanced", 0.0
         if cat in ("sparse", "cluttered"):
+            _la_t = threshold_manager.get_thresholds("label_area")
+            _la_crit = _la_t.get("critical_threshold")
+            _la_warn = _la_t.get("warning_threshold")
+            if score is not None and _la_crit is not None and score < _la_crit:
+                la_sev = "critical"
+            elif score is not None and _la_warn is not None and score < _la_warn:
+                la_sev = "warning"
+            else:
+                la_sev = "warning"
             _add(
-                "label_area", "warning", score,
+                "label_area", la_sev, score,
                 f"Label area ratio is {cat} (ratio={ratio:.3f}). "
                 + ("Labels cover too little of the diagram — many areas lack context."
                    if cat == "sparse" else
@@ -244,21 +262,31 @@ def generate_rule_based_suggestions(
         verdict = om.get("spacing_verdict", "")
         fclose = om.get("fraction_labels_too_close", 0.0)
         any_iou = om.get("fraction_pairs_any_iou", 0.0)
-        if verdict == "crowded labels":
-            _add(
-                "overlap_metrics", "critical", score,
-                f"Labels are crowded: {fclose:.0%} of labels are too close to a neighbour "
-                f"({any_iou:.2%} of label pairs physically overlap).",
-                [],
-                "Spread elements further apart, reduce label count, or increase diagram canvas size.",
-            )
-        elif verdict == "moderate_overlap":
-            _add(
-                "overlap_metrics", "warning", score,
-                f"Moderate label crowding: {fclose:.0%} of labels are too close to a neighbour.",
-                [],
-                "Review crowded areas and consider increasing spacing between nearby labels.",
-            )
+        if verdict in ("crowded labels", "moderate_overlap"):
+            _om_t = threshold_manager.get_thresholds("overlap_metrics")
+            _om_crit = _om_t.get("critical_threshold")
+            _om_warn = _om_t.get("warning_threshold")
+            if score is not None and _om_crit is not None and score < _om_crit:
+                om_sev = "critical"
+            elif score is not None and _om_warn is not None and score < _om_warn:
+                om_sev = "warning"
+            else:
+                om_sev = "warning"
+            if verdict == "crowded labels":
+                _add(
+                    "overlap_metrics", om_sev, score,
+                    f"Labels are crowded: {fclose:.0%} of labels are too close to a neighbour "
+                    f"({any_iou:.2%} of label pairs physically overlap).",
+                    [],
+                    "Spread elements further apart, reduce label count, or increase diagram canvas size.",
+                )
+            else:
+                _add(
+                    "overlap_metrics", om_sev, score,
+                    f"Moderate label crowding: {fclose:.0%} of labels are too close to a neighbour.",
+                    [],
+                    "Review crowded areas and consider increasing spacing between nearby labels.",
+                )
         else:
             _add("overlap_metrics", "ok", score, "Labels are well-spaced.", [], "")
 
@@ -274,8 +302,17 @@ def generate_rule_based_suggestions(
                 parts.append(f"{lf:.0%} of labels")
             if sf > 0:
                 parts.append(f"{sf:.0%} of shapes")
+            _ec_t = threshold_manager.get_thresholds("edge_clearance")
+            _ec_crit = _ec_t.get("critical_threshold")
+            _ec_warn = _ec_t.get("warning_threshold")
+            if score is not None and _ec_crit is not None and score < _ec_crit:
+                ec_sev = "critical"
+            elif score is not None and _ec_warn is not None and score < _ec_warn:
+                ec_sev = "warning"
+            else:
+                ec_sev = "warning"
             _add(
-                "edge_clearance", "warning", score,
+                "edge_clearance", ec_sev, score,
                 f"{' and '.join(parts)} are too close to the diagram boundary, risking clipping.",
                 [],
                 "Move elements inward to maintain a clear margin around all diagram edges.",

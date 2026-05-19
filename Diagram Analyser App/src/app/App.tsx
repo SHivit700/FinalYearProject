@@ -400,17 +400,25 @@ export default function App() {
             <ScrollArea className="flex-1 p-6">
               {currentSession.versions.length === 0 ? (
                 <div className="flex items-center justify-center h-full">
-                  <div className="text-center">
-                    <Upload className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">No Diagrams Yet</h3>
-                    <p className="text-gray-500 mb-4">
-                      Upload your first diagram to get started with analysis.
-                    </p>
-                    <Button onClick={() => fileInputRef.current?.click()}>
-                      <Upload className="w-4 h-4 mr-2" />
-                      Upload Diagram
-                    </Button>
-                  </div>
+                  {isAnalyzing ? (
+                    <div className="text-center">
+                      <Loader2 className="w-16 h-16 mx-auto text-blue-500 mb-4 animate-spin" />
+                      <h3 className="text-lg font-semibold mb-2">Analysing your diagram…</h3>
+                      <p className="text-gray-500">This may take a few seconds. Please wait.</p>
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <Upload className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                      <h3 className="text-lg font-semibold mb-2">No Diagrams Yet</h3>
+                      <p className="text-gray-500 mb-4">
+                        Upload your first diagram to get started with analysis.
+                      </p>
+                      <Button onClick={() => fileInputRef.current?.click()}>
+                        <Upload className="w-4 h-4 mr-2" />
+                        Upload Diagram
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <Tabs value={activeTab}>

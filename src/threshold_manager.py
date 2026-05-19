@@ -28,10 +28,10 @@ _FIELDNAMES = [
 
 # Original hardcoded values — used as defaults and for reset
 _DEFAULTS: dict[str, dict] = {
-    "label_readability":       {"critical_threshold": None, "warning_threshold": None,  "learning_rate": 0.10},
-    "label_area":              {"critical_threshold": None, "warning_threshold": None,  "learning_rate": 0.10},
-    "overlap_metrics":         {"critical_threshold": None, "warning_threshold": None,  "learning_rate": 0.10},
-    "edge_clearance":          {"critical_threshold": None, "warning_threshold": None,  "learning_rate": 0.10},
+    "label_readability":       {"critical_threshold": 70.0, "warning_threshold": 90.0,  "learning_rate": 0.10},
+    "label_area":              {"critical_threshold": 50.0, "warning_threshold": 80.0,  "learning_rate": 0.10},
+    "overlap_metrics":         {"critical_threshold": 50.0, "warning_threshold": 80.0,  "learning_rate": 0.10},
+    "edge_clearance":          {"critical_threshold": 50.0, "warning_threshold": 80.0,  "learning_rate": 0.10},
     "font_hierarchy":          {"critical_threshold": None, "warning_threshold": 80.0,  "learning_rate": 0.10},
     "container_utilization":   {"critical_threshold": 65.0, "warning_threshold": 90.0,  "learning_rate": 0.10},
     "isolated_boxes":          {"critical_threshold": 60.0, "warning_threshold": 70.0,  "learning_rate": 0.10},

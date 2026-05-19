@@ -1,5 +1,4 @@
-import type { AnalysisResult, MetricResult, MetricThreshold, MetricName, Severity } from '../types';
-import { DEFAULT_THRESHOLDS } from '../types';
+import type { AnalysisResult, MetricResult, MetricThreshold, Severity } from '../types';
 import { API_URL } from './api-client';
 
 export async function analyzeImage(
@@ -35,8 +34,8 @@ export function recalculateScores(
   customThresholds: Record<string, MetricThreshold>,
 ): { metrics: MetricResult[]; compositeScore: number } {
   const updatedMetrics = metrics.map((metric) => {
-    const threshold = customThresholds[metric.name] || DEFAULT_THRESHOLDS[metric.name as MetricName];
-    const severity = threshold ? calculateSeverity(metric.score, threshold) : metric.severity;
+    const customThreshold = customThresholds[metric.name];
+    const severity = customThreshold ? calculateSeverity(metric.score, customThreshold) : metric.severity;
 
     return {
       ...metric,

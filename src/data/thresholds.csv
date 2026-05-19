@@ -1,8 +1,8 @@
 metric,critical_threshold,warning_threshold,learning_rate,update_count
-label_readability,,,0.10,0
-label_area,,,0.10,0
-overlap_metrics,,,0.10,0
-edge_clearance,,,0.10,0
+label_readability,70,90,0.10,2
+label_area,50.0000,80.0000,0.10,6
+overlap_metrics,50.0000,80.0000,0.10,0
+edge_clearance,50.0000,80.0000,0.10,0
 font_hierarchy,,80.0000,0.10,0
 container_utilization,65.0000,90.0000,0.10,0
 isolated_boxes,60.0000,70.0000,0.10,0
