@@ -22,3 +22,8 @@ python-dotenv>=1.0.0
 # Streamlit GUI
 streamlit>=1.35.0
 plotly>=5.0.0
+
+# FastAPI server (React frontend integration)
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9

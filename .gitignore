@@ -221,3 +221,6 @@ brevity detection/
 label contrast quality detection/
 src/data/uploads/
 src/data/sessions/
+
+# react
+node_modules/
