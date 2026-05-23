@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { AlertCircle, AlertTriangle, XCircle, ZoomIn, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, MinusCircle, ZoomIn, X } from 'lucide-react';
 import type { AnalysisResult, Severity } from '../types';
+import { getScoreLabel } from '../types';
 import { CompositeScoreChart } from './CompositeScoreChart';
 import { MetricsDragBoard } from './MetricsDragBoard';
 import { Card } from './ui/card';
@@ -70,12 +71,15 @@ export function AnalysisTab({
               </div>
             </button>
             <div className="flex-1">
-              <h2 className="text-lg font-semibold mb-2">
-                Version {analysis.version} Analysis
-              </h2>
+              <div className="flex items-center gap-3 mb-2">
+                <h2 className="text-lg font-semibold">Version {analysis.version} Analysis</h2>
+                <span className={`text-xs font-medium px-2 py-0.5 rounded border ${getScoreLabel(analysis.compositeScore).className}`}>
+                  {getScoreLabel(analysis.compositeScore).label}
+                </span>
+              </div>
               <div className="grid grid-cols-3 gap-4 mb-4">
                 <div className="flex items-center gap-2">
-                  <XCircle className="w-5 h-5 text-red-500" />
+                  <AlertCircle className="w-5 h-5 text-red-500" />
                   <div>
                     <div className="text-2xl font-bold">{analysis.criticalCount}</div>
                     <div className="text-xs text-gray-500">Critical</div>
@@ -89,7 +93,7 @@ export function AnalysisTab({
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <AlertCircle className="w-5 h-5 text-gray-400" />
+                  <MinusCircle className="w-5 h-5 text-gray-400" />
                   <div>
                     <div className="text-2xl font-bold">{dismissedCount}</div>
                     <div className="text-xs text-gray-500">Dismissed</div>

@@ -1,10 +1,11 @@
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { GripVertical, X, RotateCcw, AlertCircle, AlertTriangle, CheckCircle } from 'lucide-react';
-import type { MetricResult, Severity } from '../types';
-import { Card } from './ui/card';
+import { GripVertical, X, RotateCcw, AlertCircle, AlertTriangle, CheckCircle, Info } from 'lucide-react';
+import type { MetricResult, Severity, MetricName } from '../types';
+import { METRIC_DEFINITIONS, getScoreLabel } from '../types';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 
 interface MetricsDragBoardProps {
   metrics: MetricResult[];
@@ -83,13 +84,40 @@ function DraggableMetric({ metric, onDismiss, onRestore }: DraggableMetricProps)
       <div className="flex items-start gap-2">
         <GripVertical className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <span className="font-medium text-sm">{metric.name}</span>
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="font-medium text-sm leading-tight">{metric.name}</span>
+                {METRIC_DEFINITIONS[metric.name as MetricName] && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        aria-label={`About ${metric.name}`}
+                        className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+                      >
+                        <Info className="w-3.5 h-3.5" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent side="top" className="max-w-xs bg-white text-gray-800 border border-gray-200 shadow-lg p-3 rounded-lg">
+                      <div className="space-y-2 text-xs">
+                        <p><span className="font-semibold">What it measures:</span> {METRIC_DEFINITIONS[metric.name as MetricName].whatItMeasures}</p>
+                        <p><span className="font-semibold">Why it matters:</span> {METRIC_DEFINITIONS[metric.name as MetricName].whyItMatters}</p>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
+              </div>
+              {METRIC_DEFINITIONS[metric.name as MetricName] && (
+                <p className="text-xs text-gray-500 mt-0.5 leading-snug">
+                  {METRIC_DEFINITIONS[metric.name as MetricName].subtitle}
+                </p>
+              )}
+            </div>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => onDismiss(metric.name)}
-              className="shrink-0 h-6 w-6 p-0"
+              className="shrink-0 h-6 w-6 p-0 mt-0.5"
             >
               <X className="w-3 h-3" />
             </Button>
@@ -107,6 +135,9 @@ function DraggableMetric({ metric, onDismiss, onRestore }: DraggableMetricProps)
                 />
               </div>
               <span className="text-xs font-medium text-gray-600 shrink-0">{metric.score}/100</span>
+              <span className={`text-xs font-medium px-1.5 py-0.5 rounded border shrink-0 ${getScoreLabel(metric.score).className}`}>
+                {getScoreLabel(metric.score).label}
+              </span>
             </div>
 
             {metric.severity !== 'pass' && (
@@ -154,6 +185,8 @@ function DropZone({ severity, metrics, onDrop, onDismiss, onRestore }: DropZoneP
       case 'critical':
         return {
           title: 'Critical Issues',
+          description: 'Metrics that are failing and most likely harming readability right now.',
+          emptyMessage: 'No critical issues — your diagram is in good shape here.',
           icon: AlertCircle,
           color: 'text-red-600',
           bgColor: 'bg-red-50',
@@ -162,6 +195,8 @@ function DropZone({ severity, metrics, onDrop, onDismiss, onRestore }: DropZoneP
       case 'warning':
         return {
           title: 'Warnings',
+          description: 'Metrics below ideal — worth fixing soon to improve clarity.',
+          emptyMessage: 'Nothing to flag — this section is clear.',
           icon: AlertTriangle,
           color: 'text-amber-600',
           bgColor: 'bg-amber-50',
@@ -170,6 +205,8 @@ function DropZone({ severity, metrics, onDrop, onDismiss, onRestore }: DropZoneP
       case 'pass':
         return {
           title: 'Passing',
+          description: 'Metrics performing well — no action needed here.',
+          emptyMessage: 'No passing metrics yet.',
           icon: CheckCircle,
           color: 'text-green-600',
           bgColor: 'bg-green-50',
@@ -191,6 +228,7 @@ function DropZone({ severity, metrics, onDrop, onDismiss, onRestore }: DropZoneP
             {metrics.length}
           </Badge>
         </div>
+        <p className="text-xs text-gray-500 mt-1">{config.description}</p>
       </div>
 
       <div
@@ -201,11 +239,6 @@ function DropZone({ severity, metrics, onDrop, onDismiss, onRestore }: DropZoneP
             : 'border-gray-300 bg-gray-50'
         }`}
       >
-        {metrics.length === 0 && !isOver && (
-          <div className="flex items-center justify-center h-32 text-gray-400 text-sm">
-            No metrics in this category
-          </div>
-        )}
         {isOver && canDrop && (
           <div className="flex items-center justify-center h-32 text-blue-600 text-sm font-medium">
             Drop here to reclassify
@@ -219,6 +252,11 @@ function DropZone({ severity, metrics, onDrop, onDismiss, onRestore }: DropZoneP
             onRestore={onRestore}
           />
         ))}
+        {metrics.filter(m => !m.isDismissed).length === 0 && !isOver && (
+          <div className="flex items-center justify-center h-full min-h-[120px]">
+            <p className="text-xs text-gray-400 text-center px-4">{config.emptyMessage}</p>
+          </div>
+        )}
       </div>
     </div>
   );
