@@ -2,7 +2,7 @@ import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { GripVertical, X, RotateCcw, AlertCircle, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import type { MetricResult, Severity, MetricName } from '../types';
-import { METRIC_DEFINITIONS, getScoreLabel } from '../types';
+import { METRIC_DEFINITIONS } from '../types';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -29,6 +29,15 @@ interface DropZoneProps {
 }
 
 const ITEM_TYPE = 'metric';
+
+function toQuadrant(cx: number, cy: number): string {
+  const h = cx < 33 ? 'left' : cx < 66 ? 'center' : 'right';
+  const v = cy < 33 ? 'top' : cy < 66 ? 'middle' : 'bottom';
+  if (h === 'center' && v === 'middle') return 'center';
+  if (h === 'center') return `${v} area`;
+  if (v === 'middle') return `${h} side`;
+  return `${v}-${h}`;
+}
 
 function DraggableMetric({ metric, onDismiss, onRestore }: DraggableMetricProps) {
   const [{ isDragging }, drag] = useDrag(() => ({
@@ -135,30 +144,34 @@ function DraggableMetric({ metric, onDismiss, onRestore }: DraggableMetricProps)
                 />
               </div>
               <span className="text-xs font-medium text-gray-600 shrink-0">{metric.score}/100</span>
-              <span className={`text-xs font-medium px-1.5 py-0.5 rounded border shrink-0 ${getScoreLabel(metric.score).className}`}>
-                {getScoreLabel(metric.score).label}
-              </span>
             </div>
 
-            {metric.severity !== 'pass' && (
-              <>
-                <p className="text-xs text-gray-600">{metric.description}</p>
-                <div className="bg-blue-50 border border-blue-200 rounded p-2">
+            {metric.severity !== 'pass' && (() => {
+              const uniqueQuadrants = Array.from(
+                new Set(
+                  metric.flaggedLocations.map(loc =>
+                    toQuadrant(loc.x + loc.width / 2, loc.y + loc.height / 2)
+                  )
+                )
+              ).slice(0, 3);
+              return (
+                <div className="bg-blue-50 border border-blue-200 rounded p-2 space-y-1.5">
                   <p className="text-xs text-gray-700">
                     <span className="font-medium">Fix:</span> {metric.recommendation}
                   </p>
+                  {uniqueQuadrants.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-gray-500">Check these areas:</p>
+                      <ol className="mt-0.5 list-decimal list-inside space-y-0.5">
+                        {uniqueQuadrants.map((q, i) => (
+                          <li key={i} className="text-xs text-gray-600">{q}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
                 </div>
-                {metric.flaggedLocations.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {metric.flaggedLocations.slice(0, 3).map((loc, idx) => (
-                      <span key={idx} className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
-                        ({loc.x}%, {loc.y}%)
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
+              );
+            })()}
           </div>
         </div>
       </div>
