@@ -26,7 +26,6 @@ export function ChatTab({
   const quickActions = [
     'What should I fix first?',
     'Explain my current score',
-    'List dismissed metrics',
     'How can I improve?',
   ];
 
