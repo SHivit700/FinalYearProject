@@ -1,4 +1,5 @@
-import { AlertCircle, AlertTriangle, XCircle } from 'lucide-react';
+import { useState } from 'react';
+import { AlertCircle, AlertTriangle, XCircle, ZoomIn, X } from 'lucide-react';
 import type { AnalysisResult, Severity } from '../types';
 import { CompositeScoreChart } from './CompositeScoreChart';
 import { MetricsDragBoard } from './MetricsDragBoard';
@@ -20,9 +21,30 @@ export function AnalysisTab({
   onUpdateSeverity,
 }: AnalysisTabProps) {
   const dismissedCount = analysis.metrics.filter(m => m.isDismissed).length;
+  const [isImageOpen, setIsImageOpen] = useState(false);
 
   return (
     <div className="space-y-6">
+      {isImageOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+          onClick={() => setIsImageOpen(false)}
+        >
+          <button
+            className="absolute top-4 right-4 text-white bg-black/40 rounded-full p-1.5 hover:bg-black/60"
+            onClick={() => setIsImageOpen(false)}
+          >
+            <X className="w-5 h-5" />
+          </button>
+          <img
+            src={analysis.imageData}
+            alt="Analyzed diagram – full size"
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="p-6 flex flex-col items-center justify-center">
           <CompositeScoreChart
@@ -33,11 +55,20 @@ export function AnalysisTab({
 
         <Card className="lg:col-span-2 p-6">
           <div className="flex items-start gap-4 mb-6">
-            <img
-              src={analysis.imageData}
-              alt="Analyzed diagram"
-              className="w-32 h-32 object-contain border rounded"
-            />
+            <button
+              className="relative w-32 h-32 flex-shrink-0 group cursor-zoom-in"
+              onClick={() => setIsImageOpen(true)}
+              title="Click to view full size"
+            >
+              <img
+                src={analysis.imageData}
+                alt="Analyzed diagram"
+                className="w-full h-full object-contain border rounded"
+              />
+              <div className="absolute inset-0 flex items-center justify-center rounded bg-black/0 group-hover:bg-black/30 transition-colors">
+                <ZoomIn className="w-7 h-7 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+              </div>
+            </button>
             <div className="flex-1">
               <h2 className="text-lg font-semibold mb-2">
                 Version {analysis.version} Analysis
