@@ -15,6 +15,7 @@ export interface MetricResult {
   recommendation: string;
   flaggedLocations: Array<{ x: number; y: number; width: number; height: number }>;
   isDismissed: boolean;
+  llmAnalysis?: { where: string; howToFix: string };
 }
 
 export interface AnalysisResult {

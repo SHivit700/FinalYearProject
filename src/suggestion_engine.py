@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -154,10 +155,67 @@ def _get_score(features: dict, metric: str) -> float | None:
 # Step 1 — Rule-based suggestion generation
 # ---------------------------------------------------------------------------
 
+def _extract_label(detail: str) -> str | None:
+    """Extract label text from a location detail string like text='Foo' conf=0.45."""
+    m = re.search(r"text=(['\"])(.+?)\1", detail)
+    return m.group(2) if m else None
+
+
+def _names_from_locs(locs: list[dict], limit: int = 5) -> list[str]:
+    """Return unique element names extracted from location detail strings."""
+    seen: list[str] = []
+    for loc in locs:
+        name = _extract_label(loc.get("detail", ""))
+        if name and name not in seen:
+            seen.append(name)
+        if len(seen) >= limit:
+            break
+    return seen
+
+
+def _loc_label(loc: dict, img_shape: tuple | None = None) -> str:
+    """Return a human-readable label with quadrant position for a single location."""
+    name = _extract_label(loc.get("detail", ""))
+    label_str = repr(name) if name else "element"
+    if img_shape:
+        H, W = img_shape[0], img_shape[1]
+        if H > 0 and W > 0:
+            cx_pct = ((loc.get("x1", 0) + loc.get("x2", 0)) / 2) / W * 100
+            cy_pct = ((loc.get("y1", 0) + loc.get("y2", 0)) / 2) / H * 100
+            h = "left" if cx_pct < 33 else ("center" if cx_pct < 66 else "right")
+            v = "top" if cy_pct < 33 else ("middle" if cy_pct < 66 else "bottom")
+            if h == "center" and v == "middle":
+                quad = "center"
+            elif h == "center":
+                quad = f"{v} area"
+            elif v == "middle":
+                quad = f"{h} side"
+            else:
+                quad = f"{v}-{h}"
+            return f"{label_str} ({quad})"
+    return label_str
+
+
+def _build_spatial_issue(base: str, locs: list[dict],
+                         img_shape: tuple | None = None, limit: int = 5) -> str:
+    """Append a spatially-qualified element list to a base issue string."""
+    if not locs:
+        return base
+    parts: list[str] = []
+    seen: set[str] = set()
+    for loc in locs[:limit]:
+        label = _loc_label(loc, img_shape)
+        if label not in seen:
+            parts.append(label)
+            seen.add(label)
+    return f"{base}: {', '.join(parts)}" if parts else base
+
+
 def generate_rule_based_suggestions(
     features: dict,
     diagram_type: str = "system_design",
     permanently_dismissed: list[str] | None = None,
+    img_shape: tuple | None = None,
 ) -> list[dict]:
     """
     Analyse the features dict and return a list of Suggestion dicts sorted
@@ -211,11 +269,14 @@ def generate_rule_based_suggestions(
                 lr_sev = "warning"
             else:
                 lr_sev = "warning"
-            _add(
-                "label_readability", lr_sev, score,
+            _lr_raw_issue = (
                 f"Low OCR confidence on {lr.get('labels_below_threshold', 0)} label(s) "
                 f"(fraction_below={lr.get('fraction_labels_below_threshold', 0):.2f}). "
-                "Text may be too small, blurry, or have poor contrast.",
+                "Text may be too small, blurry, or have poor contrast."
+            )
+            _add(
+                "label_readability", lr_sev, score,
+                _build_spatial_issue(_lr_raw_issue, locs, img_shape),
                 locs,
                 "Increase font size, sharpen text rendering, or improve contrast between text and background.",
             )
@@ -384,15 +445,21 @@ def generate_rule_based_suggestions(
             if _ib_crit is not None and ib_score < _ib_crit:
                 _add(
                     "isolated_boxes", "critical", ib_score,
-                    f"{island_count} box(es) have no connector lines (score={ib_score}/100). "
-                    "Isolated nodes break the diagram's structural flow.",
+                    _build_spatial_issue(
+                        f"{island_count} box(es) have no connector lines (score={ib_score}/100). "
+                        "Isolated nodes break the diagram's structural flow.",
+                        locs, img_shape,
+                    ),
                     locs,
                     "Draw connector arrows or lines between isolated elements and the rest of the diagram.",
                 )
             elif _ib_warn is not None and ib_score < _ib_warn:
                 _add(
                     "isolated_boxes", "warning", ib_score,
-                    f"{island_count} box(es) appear disconnected from the rest of the diagram.",
+                    _build_spatial_issue(
+                        f"{island_count} box(es) appear disconnected from the rest of the diagram.",
+                        locs, img_shape,
+                    ),
                     locs,
                     "Connect isolated boxes with appropriate arrows or relationship lines.",
                 )
@@ -421,15 +488,21 @@ def generate_rule_based_suggestions(
             if _brev_crit is not None and brev_score < _brev_crit:
                 _add(
                     "brevity", "critical", brev_score,
-                    f"Many labels are excessively long (score={brev_score:.1f}/100, "
-                    f"{len(verbose_labels)} verbose label(s) detected).",
+                    _build_spatial_issue(
+                        f"Many labels are excessively long (score={brev_score:.1f}/100, "
+                        f"{len(verbose_labels)} verbose label(s) detected).",
+                        locs, img_shape,
+                    ),
                     locs,
                     "Shorten labels to concise identifiers. Move detail to tooltips or a legend.",
                 )
             elif _brev_warn is not None and brev_score < _brev_warn:
                 _add(
                     "brevity", "warning", brev_score,
-                    f"Some labels exceed recommended length (score={brev_score:.1f}/100).",
+                    _build_spatial_issue(
+                        f"Some labels exceed recommended length (score={brev_score:.1f}/100).",
+                        locs, img_shape,
+                    ),
                     locs,
                     "Trim verbose labels. Aim for ≤40 characters per label in system design diagrams.",
                 )
@@ -509,7 +582,10 @@ def generate_rule_based_suggestions(
             locs = [
                 {
                     "x1": p["x1"], "y1": p["y1"], "x2": p["x2"], "y2": p["y2"],
-                    "detail": f"ΔL={p.get('delta_L', 0):.1f}",
+                    "detail": (
+                        f"text={p.get('text', '')!r} ΔL={p.get('delta_L', 0):.1f}"
+                        if p.get("text") else f"ΔL={p.get('delta_L', 0):.1f}"
+                    ),
                 }
                 for p in low_contrast
                 if p.get("x1") is not None
@@ -519,9 +595,12 @@ def generate_rule_based_suggestions(
             if _lc_warn is not None and lc_score < _lc_warn:
                 _add(
                     "label_contrast", "warning", lc_score,
-                    f"Label contrast score is {lc_score:.1f}/100. "
-                    f"{len(low_contrast)} label(s) have ΔL outside the optimal 40–80 range "
-                    f"(mean_ΔL={lcq.get('mean_delta_L', 0):.1f}).",
+                    _build_spatial_issue(
+                        f"Label contrast score is {lc_score:.1f}/100. "
+                        f"{len(low_contrast)} label(s) have ΔL outside the optimal 40–80 range "
+                        f"(mean_ΔL={lcq.get('mean_delta_L', 0):.1f}).",
+                        locs, img_shape,
+                    ),
                     locs,
                     "Adjust text or background color so ΔL (CIE Lab luminance difference) is between 40 and 80 for all labels.",
                 )
@@ -672,9 +751,12 @@ def synthesize_with_llm(
     session: dict | None = None,
     composite_score: float | None = None,
     composite_score_raw: float | None = None,
+    diagram_path: str | None = None,
 ) -> dict | None:
     """
     Call OpenAI to produce a prioritised natural-language report.
+    When diagram_path is provided, the diagram image is sent via vision API so the
+    LLM can reference specific visual elements by name and location.
     Returns None (without raising) on any failure.
     """
     try:
@@ -691,15 +773,43 @@ def synthesize_with_llm(
             logger.warning("LLM synthesis skipped: OPENAI_API_KEY not set.")
             return None
 
-        model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
         client = OpenAI(api_key=api_key)
+
+        # Try to load diagram image for vision API
+        image_b64: str | None = None
+        img_W: int = 0
+        img_H: int = 0
+        if diagram_path:
+            try:
+                import base64
+                img_bytes = Path(diagram_path).read_bytes()
+                image_b64 = base64.b64encode(img_bytes).decode()
+                # Get image dimensions for coordinate normalization
+                try:
+                    import cv2
+                    import numpy as np
+                    arr = np.frombuffer(img_bytes, np.uint8)
+                    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+                    if img is not None:
+                        img_H, img_W = img.shape[:2]
+                except Exception:
+                    pass
+            except Exception as exc:
+                logger.debug("Could not load diagram image for vision: %s", exc)
+
+        # Choose model: prefer vision-capable gpt-4o-mini when image available
+        if image_b64:
+            model = os.getenv("OPENAI_VISION_MODEL", "gpt-4o-mini")
+        else:
+            model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 
         dismissed = session.get("permanently_dismissed", []) if session else []
         non_ok = [s for s in suggestions if s["severity"] != "ok"]
 
         issues_text = ""
         for s in non_ok:
-            loc_count = len(s.get("locations", []))
+            locations = s.get("locations", [])
+            loc_count = len(locations)
             loc_str = f" ({loc_count} location(s) flagged)" if loc_count else ""
             display = _METRIC_DISPLAY_NAMES.get(s["metric"], s["metric"])
             issues_text += (
@@ -707,6 +817,28 @@ def synthesize_with_llm(
                 f"  Issue: {s['issue']}\n"
                 f"  Fix: {s['recommendation']}\n"
             )
+            # Append element names so the LLM can reference them in its "where" field
+            element_labels = _names_from_locs(locations)
+            if element_labels:
+                issues_text += f"  Elements affected: {', '.join(repr(n) for n in element_labels)}\n"
+            # Append spatial context using normalized coordinates when image dims are known
+            if img_W and img_H and locations:
+                spatial_hints = []
+                for loc in locations[:5]:
+                    px1, py1 = loc.get("x1", 0), loc.get("y1", 0)
+                    px2, py2 = loc.get("x2", px1), loc.get("y2", py1)
+                    cx_pct = ((px1 + px2) / 2) / img_W * 100
+                    cy_pct = ((py1 + py2) / 2) / img_H * 100
+                    h = "left" if cx_pct < 33 else ("center" if cx_pct < 66 else "right")
+                    v = "top" if cy_pct < 33 else ("middle" if cy_pct < 66 else "bottom")
+                    quad = "center" if (h == "center" and v == "middle") else (
+                        f"{v} area" if h == "center" else (f"{h} side" if v == "middle" else f"{v}-{h}")
+                    )
+                    name = _extract_label(loc.get("detail", ""))
+                    hint = f"'{name}' at {quad}" if name else f"element at {quad}"
+                    spatial_hints.append(hint)
+                if spatial_hints:
+                    issues_text += f"  Locations: {'; '.join(spatial_hints)}\n"
 
         history_str = _session_history_summary(session) if session else ""
 
@@ -714,8 +846,13 @@ def synthesize_with_llm(
             f"Composite quality score (active metrics, dismissed excluded): {composite_score}\n"
             + (f"Raw score (all metrics, for reference): {composite_score_raw}\n" if composite_score_raw is not None else "")
         )
+        vision_note = (
+            "\nYou are also provided the diagram image. Use it to visually identify and "
+            "reference specific elements by name and location in your 'where' fields.\n"
+            if image_b64 else ""
+        )
         prompt = (
-            f"You are an expert diagram quality analyst reviewing a {diagram_type} diagram.\n\n"
+            f"You are an expert diagram quality analyst reviewing a {diagram_type} diagram.{vision_note}\n\n"
             "Automated metric evaluation has produced the following findings:\n\n"
             f"{issues_text or 'No significant issues detected — all metrics passed.'}\n\n"
             f"{score_line}\n"
@@ -727,7 +864,7 @@ def synthesize_with_llm(
             '  "overall_summary": "2-3 sentence executive summary of diagram quality",\n'
             '  "priority_issues": [\n'
             '    {"rank": 1, "metric": "metric_key", "severity": "critical|warning", '
-            '"what": "concise description", "where": "location info or empty string", '
+            '"what": "concise description", "where": "specific element name and location in the diagram", '
             '"how_to_fix": "specific actionable fix"}\n'
             '  ],\n'
             '  "positive_aspects": ["what the diagram does well"],\n'
@@ -735,12 +872,25 @@ def synthesize_with_llm(
             'or \\"First analysis\\" if no prior turns"\n'
             "}\n\n"
             "Only include non-ok issues in priority_issues. Be concise and actionable. "
-            "Do not repeat advice the user has already dismissed."
+            "Do not repeat advice the user has already dismissed. "
+            "In 'where', name the specific element (e.g. 'the API Gateway node in the top-left') rather than a generic region."
         )
+
+        content: list[dict] = [{"type": "text", "text": prompt}]
+        if image_b64:
+            suffix = Path(diagram_path).suffix.lower().lstrip(".") if diagram_path else "png"
+            mime = {"jpg": "jpeg", "jpeg": "jpeg"}.get(suffix, suffix) or "png"
+            content.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/{mime};base64,{image_b64}",
+                    "detail": "low",
+                },
+            })
 
         response = client.chat.completions.create(
             model=model,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "user", "content": content}],
             response_format={"type": "json_object"},
             temperature=0.3,
         )
@@ -884,6 +1034,7 @@ def generate_suggestions(
     image_path: str | None = None,
     use_llm: bool = True,
     session: dict | None = None,
+    img_shape: tuple | None = None,
 ) -> dict:
     """
     Main entry point. Runs rule-based analysis, optionally calls LLM synthesis,
@@ -899,7 +1050,7 @@ def generate_suggestions(
     """
     dismissed = session.get("permanently_dismissed", []) if session else []
 
-    rule_based = generate_rule_based_suggestions(features, diagram_type, dismissed)
+    rule_based = generate_rule_based_suggestions(features, diagram_type, dismissed, img_shape=img_shape)
     composite_score = _compute_composite_score(features, dismissed)
 
     llm_report = None
@@ -910,6 +1061,7 @@ def generate_suggestions(
             diagram_type,
             session,
             composite_score=composite_score,
+            diagram_path=image_path,
         )
 
     return {

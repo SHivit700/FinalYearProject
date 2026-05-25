@@ -109,15 +109,28 @@ def _convert_locations(
     return result
 
 
+def _build_llm_analysis_index(llm_report: dict) -> dict[str, dict]:
+    """Build a lookup from Python metric key -> {where, howToFix} from priority_issues."""
+    index: dict[str, dict] = {}
+    for issue in (llm_report or {}).get("priority_issues", []):
+        py_key = issue.get("metric", "")
+        where = issue.get("where", "")
+        how_to_fix = issue.get("how_to_fix", "")
+        if py_key and (where or how_to_fix):
+            index[py_key] = {"where": where, "howToFix": how_to_fix}
+    return index
+
+
 def _suggestion_to_metric_result(
     suggestion: dict,
     image_shape: list | tuple,
     dismissed_py_keys: list[str],
+    llm_analysis_index: dict[str, dict] | None = None,
 ) -> dict:
     py_key = suggestion["metric"]
     react_name = PYTHON_KEY_TO_REACT_NAME.get(py_key, py_key)
     score = suggestion.get("score")
-    return {
+    result: dict = {
         "name":             react_name,
         "score":            round(score) if score is not None else 0,
         "severity":         _map_severity_to_react(suggestion.get("severity", "ok")),
@@ -126,6 +139,11 @@ def _suggestion_to_metric_result(
         "flaggedLocations": _convert_locations(suggestion.get("locations", []), image_shape),
         "isDismissed":      py_key in dismissed_py_keys,
     }
+    if llm_analysis_index:
+        llm_data = llm_analysis_index.get(py_key)
+        if llm_data:
+            result["llmAnalysis"] = llm_data
+    return result
 
 
 def _load_image_as_base64(path: str) -> str:
@@ -146,8 +164,11 @@ def _version_to_analysis_result(version: dict, session: dict) -> dict:
     dismissed_py = session.get("permanently_dismissed", [])
     image_shape = version.get("_image_shape", [1000, 1000, 3])
 
+    llm = version.get("llm_report") or {}
+    llm_analysis_index = _build_llm_analysis_index(llm)
+
     metrics = [
-        _suggestion_to_metric_result(s, image_shape, dismissed_py)
+        _suggestion_to_metric_result(s, image_shape, dismissed_py, llm_analysis_index)
         for s in version.get("suggestions", [])
     ]
 
@@ -155,7 +176,6 @@ def _version_to_analysis_result(version: dict, session: dict) -> dict:
     critical_count = sum(1 for m in active if m["severity"] == "critical")
     warning_count  = sum(1 for m in active if m["severity"] == "warning")
 
-    llm = version.get("llm_report") or {}
     ai_narrative = llm.get("overall_summary") or None
 
     return {

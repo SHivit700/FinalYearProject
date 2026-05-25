@@ -182,12 +182,16 @@ def _analyze_new_version(
     result = extract_features_for_image(str(image_path), diagram_type=session["diagram_type"])
     features = result["features"]
 
+    _raw_shape = features.get("image_shape", (1000, 1000, 3))
+    _img_shape_2d = (_raw_shape[0], _raw_shape[1])
+
     suggestions_result = generate_suggestions(
         features,
         diagram_type=session["diagram_type"],
         image_path=str(image_path),
         use_llm=True,
         session=session,
+        img_shape=_img_shape_2d,
     )
 
     metric_scores = {m: _get_score(features, m) for m in _ACTIVE_METRICS}
@@ -435,6 +439,9 @@ def main() -> None:
 
     features = result["features"]
 
+    _raw_shape2 = features.get("image_shape", (1000, 1000, 3))
+    _img_shape_2d2 = (_raw_shape2[0], _raw_shape2[1])
+
     # ── Generate suggestions ──────────────────────────────────────────────
     suggestions_result = generate_suggestions(
         features,
@@ -442,6 +449,7 @@ def main() -> None:
         image_path=str(image_path),
         use_llm=True,
         session=session,
+        img_shape=_img_shape_2d2,
     )
 
     # ── Build version record ──────────────────────────────────────────────

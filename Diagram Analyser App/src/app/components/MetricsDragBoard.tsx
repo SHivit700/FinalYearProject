@@ -12,12 +12,16 @@ interface MetricsDragBoardProps {
   onUpdateSeverity: (metricName: string, newSeverity: Severity) => void;
   onDismiss: (metricName: string) => void;
   onRestore: (metricName: string) => void;
+  onMetricHighlight: (metric: MetricResult | null) => void;
+  highlightedMetric: MetricResult | null;
 }
 
 interface DraggableMetricProps {
   metric: MetricResult;
   onDismiss: (metricName: string) => void;
   onRestore: (metricName: string) => void;
+  onMetricHighlight: (metric: MetricResult | null) => void;
+  isHighlighted: boolean;
 }
 
 interface DropZoneProps {
@@ -26,6 +30,8 @@ interface DropZoneProps {
   onDrop: (metricName: string, newSeverity: Severity) => void;
   onDismiss: (metricName: string) => void;
   onRestore: (metricName: string) => void;
+  onMetricHighlight: (metric: MetricResult | null) => void;
+  highlightedMetric: MetricResult | null;
 }
 
 const ITEM_TYPE = 'metric';
@@ -39,14 +45,14 @@ function toQuadrant(cx: number, cy: number): string {
   return `${v}-${h}`;
 }
 
-function DraggableMetric({ metric, onDismiss, onRestore }: DraggableMetricProps) {
+function DraggableMetric({ metric, onDismiss, onRestore, onMetricHighlight, isHighlighted }: DraggableMetricProps) {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: ITEM_TYPE,
     item: { name: metric.name, currentSeverity: metric.severity },
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),
-  }));
+  }), [metric.name, metric.severity]);
 
   const getSeverityColor = (severity: Severity) => {
     switch (severity) {
@@ -86,9 +92,11 @@ function DraggableMetric({ metric, onDismiss, onRestore }: DraggableMetricProps)
   return (
     <div
       ref={drag}
+      onMouseEnter={() => onMetricHighlight(metric)}
+      onMouseLeave={() => onMetricHighlight(null)}
       className={`bg-white border-l-4 ${getSeverityColor(metric.severity)} border border-gray-200 rounded-lg p-3 cursor-move hover:shadow-md transition-all ${
         isDragging ? 'opacity-50' : ''
-      }`}
+      } ${isHighlighted ? 'ring-2 ring-blue-400 shadow-md' : ''}`}
     >
       <div className="flex items-start gap-2">
         <GripVertical className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
@@ -97,24 +105,6 @@ function DraggableMetric({ metric, onDismiss, onRestore }: DraggableMetricProps)
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="font-medium text-sm leading-tight">{metric.name}</span>
-                {METRIC_DEFINITIONS[metric.name as MetricName] && (
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button
-                        aria-label={`About ${metric.name}`}
-                        className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
-                      >
-                        <Info className="w-3.5 h-3.5" />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent side="top" className="max-w-xs bg-white text-gray-800 border border-gray-200 shadow-lg p-3 rounded-lg">
-                      <div className="space-y-2 text-xs">
-                        <p><span className="font-semibold">What it measures:</span> {METRIC_DEFINITIONS[metric.name as MetricName].whatItMeasures}</p>
-                        <p><span className="font-semibold">Why it matters:</span> {METRIC_DEFINITIONS[metric.name as MetricName].whyItMatters}</p>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                )}
               </div>
               {METRIC_DEFINITIONS[metric.name as MetricName] && (
                 <p className="text-xs text-gray-500 mt-0.5 leading-snug">
@@ -146,6 +136,26 @@ function DraggableMetric({ metric, onDismiss, onRestore }: DraggableMetricProps)
               <span className="text-xs font-medium text-gray-600 shrink-0">{metric.score}/100</span>
             </div>
 
+            {metric.severity === 'pass' && METRIC_DEFINITIONS[metric.name as MetricName] && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    aria-label={`Learn more about ${metric.name}`}
+                    className="flex items-center gap-0.5 text-blue-400 hover:text-blue-600 transition-colors"
+                  >
+                    <Info className="w-3 h-3" />
+                    <span className="text-xs">Learn more about this metric</span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent side="top" className="max-w-xs bg-white text-gray-800 border border-gray-200 shadow-lg p-3 rounded-lg">
+                  <div className="space-y-2 text-xs">
+                    <p><span className="font-semibold">What it measures:</span> {METRIC_DEFINITIONS[metric.name as MetricName].whatItMeasures}</p>
+                    <p><span className="font-semibold">Why it matters:</span> {METRIC_DEFINITIONS[metric.name as MetricName].whyItMatters}</p>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
+
             {metric.severity !== 'pass' && (() => {
               const uniqueQuadrants = Array.from(
                 new Set(
@@ -155,13 +165,55 @@ function DraggableMetric({ metric, onDismiss, onRestore }: DraggableMetricProps)
                 )
               ).slice(0, 3);
               return (
-                <div className="bg-blue-50 border border-blue-200 rounded p-2 space-y-1.5">
-                  <p className="text-xs text-gray-700">
-                    <span className="font-medium">Fix:</span> {metric.recommendation}
-                  </p>
+                <div className="space-y-1.5">
+                  {metric.llmAnalysis ? (
+                    <>
+                      <div className="bg-blue-50 border border-blue-200 rounded p-2">
+                        <p className="text-xs font-semibold text-blue-800 mb-0.5">Where to look</p>
+                        <p className="text-xs text-blue-700">{metric.llmAnalysis.where}</p>
+                      </div>
+                      <div className="bg-amber-50 border border-amber-200 rounded p-2">
+                        <p className="text-xs font-semibold text-amber-800 mb-0.5">How to fix</p>
+                        <p className="text-xs text-amber-700">{metric.llmAnalysis.howToFix}</p>
+                      </div>
+                    </>
+                  ) : (
+                    <div className={`border rounded p-2 transition-colors ${
+                      isHighlighted ? 'bg-blue-100 border-blue-300' : 'bg-blue-50 border-blue-200'
+                    }`}>
+                      <p className="text-xs text-gray-700">
+                        <span className="font-medium">Fix:</span> {metric.recommendation}
+                      </p>
+                    </div>
+                  )}
+                  {METRIC_DEFINITIONS[metric.name as MetricName] && (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          aria-label={`Learn more about ${metric.name}`}
+                          className="flex items-center gap-0.5 text-blue-400 hover:text-blue-600 transition-colors"
+                        >
+                          <Info className="w-3 h-3" />
+                          <span className="text-xs">Learn more about this metric</span>
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent side="top" className="max-w-xs bg-white text-gray-800 border border-gray-200 shadow-lg p-3 rounded-lg">
+                        <div className="space-y-2 text-xs">
+                          <p><span className="font-semibold">What it measures:</span> {METRIC_DEFINITIONS[metric.name as MetricName].whatItMeasures}</p>
+                          <p><span className="font-semibold">Why it matters:</span> {METRIC_DEFINITIONS[metric.name as MetricName].whyItMatters}</p>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  )}
                   {uniqueQuadrants.length > 0 && (
-                    <div>
-                      <p className="text-xs font-medium text-gray-500">Check these areas:</p>
+                    <div className={`border rounded p-2 transition-colors ${
+                      isHighlighted ? 'bg-gray-100 border-gray-300' : 'bg-gray-50 border-gray-200'
+                    }`}>
+                      <p className="text-xs font-medium text-gray-500">
+                        {isHighlighted
+                          ? '👆 Highlighted on diagram above:'
+                          : 'Areas to check (hover to highlight):'}
+                      </p>
                       <ol className="mt-0.5 list-decimal list-inside space-y-0.5">
                         {uniqueQuadrants.map((q, i) => (
                           <li key={i} className="text-xs text-gray-600">{q}</li>
@@ -179,7 +231,7 @@ function DraggableMetric({ metric, onDismiss, onRestore }: DraggableMetricProps)
   );
 }
 
-function DropZone({ severity, metrics, onDrop, onDismiss, onRestore }: DropZoneProps) {
+function DropZone({ severity, metrics, onDrop, onDismiss, onRestore, onMetricHighlight, highlightedMetric }: DropZoneProps) {
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: ITEM_TYPE,
     drop: (item: { name: string; currentSeverity: Severity }) => {
@@ -191,7 +243,7 @@ function DropZone({ severity, metrics, onDrop, onDismiss, onRestore }: DropZoneP
       isOver: monitor.isOver(),
       canDrop: monitor.canDrop(),
     }),
-  }));
+  }), [onDrop, severity]);
 
   const getSeverityConfig = (severity: Severity) => {
     switch (severity) {
@@ -263,6 +315,8 @@ function DropZone({ severity, metrics, onDrop, onDismiss, onRestore }: DropZoneP
             metric={metric}
             onDismiss={onDismiss}
             onRestore={onRestore}
+            onMetricHighlight={onMetricHighlight}
+            isHighlighted={highlightedMetric?.name === metric.name}
           />
         ))}
         {metrics.filter(m => !m.isDismissed).length === 0 && !isOver && (
@@ -280,6 +334,8 @@ export function MetricsDragBoard({
   onUpdateSeverity,
   onDismiss,
   onRestore,
+  onMetricHighlight,
+  highlightedMetric,
 }: MetricsDragBoardProps) {
   const criticalMetrics = metrics.filter(m => m.severity === 'critical');
   const warningMetrics = metrics.filter(m => m.severity === 'warning');
@@ -291,7 +347,7 @@ export function MetricsDragBoard({
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <p className="text-sm text-gray-700">
             <span className="font-medium">Drag and drop</span> metrics between columns to reclassify their severity.
-            This helps you adjust the analysis to match your specific diagram requirements.
+            <span className="ml-1">Hover a metric card to highlight its flagged locations on the diagram above.</span>
           </p>
         </div>
 
@@ -302,6 +358,8 @@ export function MetricsDragBoard({
             onDrop={onUpdateSeverity}
             onDismiss={onDismiss}
             onRestore={onRestore}
+            onMetricHighlight={onMetricHighlight}
+            highlightedMetric={highlightedMetric}
           />
           <DropZone
             severity="warning"
@@ -309,6 +367,8 @@ export function MetricsDragBoard({
             onDrop={onUpdateSeverity}
             onDismiss={onDismiss}
             onRestore={onRestore}
+            onMetricHighlight={onMetricHighlight}
+            highlightedMetric={highlightedMetric}
           />
           <DropZone
             severity="pass"
@@ -316,6 +376,8 @@ export function MetricsDragBoard({
             onDrop={onUpdateSeverity}
             onDismiss={onDismiss}
             onRestore={onRestore}
+            onMetricHighlight={onMetricHighlight}
+            highlightedMetric={highlightedMetric}
           />
         </div>
       </div>
