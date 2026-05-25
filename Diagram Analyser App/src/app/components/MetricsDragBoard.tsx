@@ -186,6 +186,22 @@ function DraggableMetric({ metric, onDismiss, onRestore, onMetricHighlight, isHi
                       </p>
                     </div>
                   )}
+                  {uniqueQuadrants.length > 0 && (
+                    <div className={`border rounded p-2 transition-colors ${
+                      isHighlighted ? 'bg-gray-100 border-gray-300' : 'bg-gray-50 border-gray-200'
+                    }`}>
+                      <p className="text-xs font-medium text-gray-500">
+                        {isHighlighted
+                          ? '👆 Highlighted on diagram above:'
+                          : 'Areas to check (hover to highlight):'}
+                      </p>
+                      <ol className="mt-0.5 list-decimal list-inside space-y-0.5">
+                        {uniqueQuadrants.map((q, i) => (
+                          <li key={i} className="text-xs text-gray-600">{q}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
                   {METRIC_DEFINITIONS[metric.name as MetricName] && (
                     <Popover>
                       <PopoverTrigger asChild>
@@ -204,22 +220,6 @@ function DraggableMetric({ metric, onDismiss, onRestore, onMetricHighlight, isHi
                         </div>
                       </PopoverContent>
                     </Popover>
-                  )}
-                  {uniqueQuadrants.length > 0 && (
-                    <div className={`border rounded p-2 transition-colors ${
-                      isHighlighted ? 'bg-gray-100 border-gray-300' : 'bg-gray-50 border-gray-200'
-                    }`}>
-                      <p className="text-xs font-medium text-gray-500">
-                        {isHighlighted
-                          ? '👆 Highlighted on diagram above:'
-                          : 'Areas to check (hover to highlight):'}
-                      </p>
-                      <ol className="mt-0.5 list-decimal list-inside space-y-0.5">
-                        {uniqueQuadrants.map((q, i) => (
-                          <li key={i} className="text-xs text-gray-600">{q}</li>
-                        ))}
-                      </ol>
-                    </div>
                   )}
                 </div>
               );
