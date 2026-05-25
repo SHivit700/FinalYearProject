@@ -12,16 +12,12 @@ interface MetricsDragBoardProps {
   onUpdateSeverity: (metricName: string, newSeverity: Severity) => void;
   onDismiss: (metricName: string) => void;
   onRestore: (metricName: string) => void;
-  onMetricHighlight: (metric: MetricResult | null) => void;
-  highlightedMetric: MetricResult | null;
 }
 
 interface DraggableMetricProps {
   metric: MetricResult;
   onDismiss: (metricName: string) => void;
   onRestore: (metricName: string) => void;
-  onMetricHighlight: (metric: MetricResult | null) => void;
-  isHighlighted: boolean;
 }
 
 interface DropZoneProps {
@@ -30,8 +26,6 @@ interface DropZoneProps {
   onDrop: (metricName: string, newSeverity: Severity) => void;
   onDismiss: (metricName: string) => void;
   onRestore: (metricName: string) => void;
-  onMetricHighlight: (metric: MetricResult | null) => void;
-  highlightedMetric: MetricResult | null;
 }
 
 const ITEM_TYPE = 'metric';
@@ -45,7 +39,7 @@ function toQuadrant(cx: number, cy: number): string {
   return `${v}-${h}`;
 }
 
-function DraggableMetric({ metric, onDismiss, onRestore, onMetricHighlight, isHighlighted }: DraggableMetricProps) {
+function DraggableMetric({ metric, onDismiss, onRestore }: DraggableMetricProps) {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: ITEM_TYPE,
     item: { name: metric.name, currentSeverity: metric.severity },
@@ -56,12 +50,9 @@ function DraggableMetric({ metric, onDismiss, onRestore, onMetricHighlight, isHi
 
   const getSeverityColor = (severity: Severity) => {
     switch (severity) {
-      case 'critical':
-        return 'border-l-red-500';
-      case 'warning':
-        return 'border-l-amber-500';
-      case 'pass':
-        return 'border-l-green-500';
+      case 'critical': return 'border-l-red-500';
+      case 'warning':  return 'border-l-amber-500';
+      case 'pass':     return 'border-l-green-500';
     }
   };
 
@@ -76,12 +67,7 @@ function DraggableMetric({ metric, onDismiss, onRestore, onMetricHighlight, isHi
             </div>
             <p className="text-xs text-gray-500">Score: {metric.score}/100</p>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onRestore(metric.name)}
-            className="shrink-0"
-          >
+          <Button variant="ghost" size="sm" onClick={() => onRestore(metric.name)} className="shrink-0">
             <RotateCcw className="w-3 h-3" />
           </Button>
         </div>
@@ -92,11 +78,9 @@ function DraggableMetric({ metric, onDismiss, onRestore, onMetricHighlight, isHi
   return (
     <div
       ref={drag}
-      onMouseEnter={() => onMetricHighlight(metric)}
-      onMouseLeave={() => onMetricHighlight(null)}
       className={`bg-white border-l-4 ${getSeverityColor(metric.severity)} border border-gray-200 rounded-lg p-3 cursor-move hover:shadow-md transition-all ${
         isDragging ? 'opacity-50' : ''
-      } ${isHighlighted ? 'ring-2 ring-blue-400 shadow-md' : ''}`}
+      }`}
     >
       <div className="flex items-start gap-2">
         <GripVertical className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
@@ -112,126 +96,90 @@ function DraggableMetric({ metric, onDismiss, onRestore, onMetricHighlight, isHi
                 </p>
               )}
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onDismiss(metric.name)}
-              className="shrink-0 h-6 w-6 p-0 mt-0.5"
-            >
-              <X className="w-3 h-3" />
-            </Button>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <div className="flex-1 bg-gray-200 rounded-full h-1.5">
-                <div
-                  className={`h-1.5 rounded-full ${
-                    metric.severity === 'critical' ? 'bg-red-500' :
-                    metric.severity === 'warning' ? 'bg-amber-500' : 'bg-green-500'
-                  }`}
-                  style={{ width: `${metric.score}%` }}
-                />
-              </div>
-              <span className="text-xs font-medium text-gray-600 shrink-0">{metric.score}/100</span>
+            <div className="flex items-center gap-1 shrink-0">
+              <span className="text-xs font-mono text-gray-500">{metric.score}/100</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0 text-gray-400 hover:text-red-500"
+                onClick={() => onDismiss(metric.name)}
+                title="Dismiss this metric"
+              >
+                <X className="w-3 h-3" />
+              </Button>
             </div>
-
-            {metric.severity === 'pass' && METRIC_DEFINITIONS[metric.name as MetricName] && (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button
-                    aria-label={`Learn more about ${metric.name}`}
-                    className="flex items-center gap-0.5 text-blue-400 hover:text-blue-600 transition-colors"
-                  >
-                    <Info className="w-3 h-3" />
-                    <span className="text-xs">Learn more about this metric</span>
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent side="top" className="max-w-xs bg-white text-gray-800 border border-gray-200 shadow-lg p-3 rounded-lg">
-                  <div className="space-y-2 text-xs">
-                    <p><span className="font-semibold">What it measures:</span> {METRIC_DEFINITIONS[metric.name as MetricName].whatItMeasures}</p>
-                    <p><span className="font-semibold">Why it matters:</span> {METRIC_DEFINITIONS[metric.name as MetricName].whyItMatters}</p>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            )}
-
-            {metric.severity !== 'pass' && (() => {
-              const uniqueQuadrants = Array.from(
-                new Set(
-                  metric.flaggedLocations.map(loc =>
-                    toQuadrant(loc.x + loc.width / 2, loc.y + loc.height / 2)
-                  )
-                )
-              ).slice(0, 3);
-              return (
-                <div className="space-y-1.5">
-                  {metric.llmAnalysis ? (
-                    <>
-                      <div className="bg-blue-50 border border-blue-200 rounded p-2">
-                        <p className="text-xs font-semibold text-blue-800 mb-0.5">Where to look</p>
-                        <p className="text-xs text-blue-700">{metric.llmAnalysis.where}</p>
-                      </div>
-                      <div className="bg-amber-50 border border-amber-200 rounded p-2">
-                        <p className="text-xs font-semibold text-amber-800 mb-0.5">How to fix</p>
-                        <p className="text-xs text-amber-700">{metric.llmAnalysis.howToFix}</p>
-                      </div>
-                    </>
-                  ) : (
-                    <div className={`border rounded p-2 transition-colors ${
-                      isHighlighted ? 'bg-blue-100 border-blue-300' : 'bg-blue-50 border-blue-200'
-                    }`}>
-                      <p className="text-xs text-gray-700">
-                        <span className="font-medium">Fix:</span> {metric.recommendation}
-                      </p>
-                    </div>
-                  )}
-                  {uniqueQuadrants.length > 0 && (
-                    <div className={`border rounded p-2 transition-colors ${
-                      isHighlighted ? 'bg-gray-100 border-gray-300' : 'bg-gray-50 border-gray-200'
-                    }`}>
-                      <p className="text-xs font-medium text-gray-500">
-                        {isHighlighted
-                          ? '👆 Highlighted on diagram above:'
-                          : 'Areas to check (hover to highlight):'}
-                      </p>
-                      <ol className="mt-0.5 list-decimal list-inside space-y-0.5">
-                        {uniqueQuadrants.map((q, i) => (
-                          <li key={i} className="text-xs text-gray-600">{q}</li>
-                        ))}
-                      </ol>
-                    </div>
-                  )}
-                  {METRIC_DEFINITIONS[metric.name as MetricName] && (
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <button
-                          aria-label={`Learn more about ${metric.name}`}
-                          className="flex items-center gap-0.5 text-blue-400 hover:text-blue-600 transition-colors"
-                        >
-                          <Info className="w-3 h-3" />
-                          <span className="text-xs">Learn more about this metric</span>
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent side="top" className="max-w-xs bg-white text-gray-800 border border-gray-200 shadow-lg p-3 rounded-lg">
-                        <div className="space-y-2 text-xs">
-                          <p><span className="font-semibold">What it measures:</span> {METRIC_DEFINITIONS[metric.name as MetricName].whatItMeasures}</p>
-                          <p><span className="font-semibold">Why it matters:</span> {METRIC_DEFINITIONS[metric.name as MetricName].whyItMatters}</p>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  )}
-                </div>
-              );
-            })()}
           </div>
+
+          <p className="text-xs text-gray-600 mb-2 leading-relaxed">{metric.description}</p>
+
+          {METRIC_DEFINITIONS[metric.name as MetricName] && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  aria-label={`Learn more about ${metric.name}`}
+                  className="flex items-center gap-0.5 text-blue-400 hover:text-blue-600 transition-colors mb-2"
+                >
+                  <Info className="w-3 h-3" />
+                  <span className="text-xs">Learn more about this metric</span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="top" className="max-w-xs bg-white text-gray-800 border border-gray-200 shadow-lg p-3 rounded-lg">
+                <div className="space-y-2 text-xs">
+                  <p><span className="font-semibold">What it measures:</span> {METRIC_DEFINITIONS[metric.name as MetricName].whatItMeasures}</p>
+                  <p><span className="font-semibold">Why it matters:</span> {METRIC_DEFINITIONS[metric.name as MetricName].whyItMatters}</p>
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
+
+          {metric.severity !== 'pass' && (() => {
+            const uniqueQuadrants = Array.from(
+              new Set(
+                metric.flaggedLocations.map(loc =>
+                  toQuadrant(loc.x + loc.width / 2, loc.y + loc.height / 2)
+                )
+              )
+            ).slice(0, 3);
+            return (
+              <div className="space-y-1.5">
+                {metric.llmAnalysis ? (
+                  <>
+                    <div className="bg-blue-50 border border-blue-200 rounded p-2">
+                      <p className="text-xs font-semibold text-blue-800 mb-0.5">Where to look</p>
+                      <p className="text-xs text-blue-700">{metric.llmAnalysis.where}</p>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded p-2">
+                      <p className="text-xs font-semibold text-amber-800 mb-0.5">How to fix</p>
+                      <p className="text-xs text-amber-700">{metric.llmAnalysis.howToFix}</p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="bg-blue-50 border border-blue-200 rounded p-2">
+                    <p className="text-xs text-gray-700">
+                      <span className="font-medium">Fix:</span> {metric.recommendation}
+                    </p>
+                  </div>
+                )}
+                {uniqueQuadrants.length > 0 && (
+                  <div className="bg-gray-50 border border-gray-200 rounded p-2">
+                    <p className="text-xs font-medium text-gray-500 mb-0.5">Areas to check:</p>
+                    <ol className="list-decimal list-inside space-y-0.5">
+                      {uniqueQuadrants.map((q, i) => (
+                        <li key={i} className="text-xs text-gray-600">{q}</li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>
   );
 }
 
-function DropZone({ severity, metrics, onDrop, onDismiss, onRestore, onMetricHighlight, highlightedMetric }: DropZoneProps) {
+function DropZone({ severity, metrics, onDrop, onDismiss, onRestore }: DropZoneProps) {
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: ITEM_TYPE,
     drop: (item: { name: string; currentSeverity: Severity }) => {
@@ -289,9 +237,7 @@ function DropZone({ severity, metrics, onDrop, onDismiss, onRestore, onMetricHig
         <div className="flex items-center gap-2">
           <Icon className={`w-5 h-5 ${config.color}`} />
           <h3 className={`font-semibold ${config.color}`}>{config.title}</h3>
-          <Badge variant="secondary" className="ml-auto">
-            {metrics.length}
-          </Badge>
+          <Badge variant="secondary" className="ml-auto">{metrics.length}</Badge>
         </div>
         <p className="text-xs text-gray-500 mt-1">{config.description}</p>
       </div>
@@ -299,9 +245,7 @@ function DropZone({ severity, metrics, onDrop, onDismiss, onRestore, onMetricHig
       <div
         ref={drop}
         className={`min-h-[400px] rounded-lg border-2 border-dashed p-3 space-y-3 transition-colors ${
-          isOver && canDrop
-            ? 'border-blue-400 bg-blue-50'
-            : 'border-gray-300 bg-gray-50'
+          isOver && canDrop ? 'border-blue-400 bg-blue-50' : 'border-gray-300 bg-gray-50'
         }`}
       >
         {isOver && canDrop && (
@@ -315,8 +259,6 @@ function DropZone({ severity, metrics, onDrop, onDismiss, onRestore, onMetricHig
             metric={metric}
             onDismiss={onDismiss}
             onRestore={onRestore}
-            onMetricHighlight={onMetricHighlight}
-            isHighlighted={highlightedMetric?.name === metric.name}
           />
         ))}
         {metrics.filter(m => !m.isDismissed).length === 0 && !isOver && (
@@ -334,12 +276,10 @@ export function MetricsDragBoard({
   onUpdateSeverity,
   onDismiss,
   onRestore,
-  onMetricHighlight,
-  highlightedMetric,
 }: MetricsDragBoardProps) {
   const criticalMetrics = metrics.filter(m => m.severity === 'critical');
-  const warningMetrics = metrics.filter(m => m.severity === 'warning');
-  const passMetrics = metrics.filter(m => m.severity === 'pass');
+  const warningMetrics  = metrics.filter(m => m.severity === 'warning');
+  const passMetrics     = metrics.filter(m => m.severity === 'pass');
 
   return (
     <DndProvider backend={HTML5Backend}>
@@ -347,38 +287,13 @@ export function MetricsDragBoard({
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <p className="text-sm text-gray-700">
             <span className="font-medium">Drag and drop</span> metrics between columns to reclassify their severity.
-            <span className="ml-1">Hover a metric card to highlight its flagged locations on the diagram above.</span>
           </p>
         </div>
 
         <div className="flex gap-4 overflow-x-auto pb-4">
-          <DropZone
-            severity="critical"
-            metrics={criticalMetrics}
-            onDrop={onUpdateSeverity}
-            onDismiss={onDismiss}
-            onRestore={onRestore}
-            onMetricHighlight={onMetricHighlight}
-            highlightedMetric={highlightedMetric}
-          />
-          <DropZone
-            severity="warning"
-            metrics={warningMetrics}
-            onDrop={onUpdateSeverity}
-            onDismiss={onDismiss}
-            onRestore={onRestore}
-            onMetricHighlight={onMetricHighlight}
-            highlightedMetric={highlightedMetric}
-          />
-          <DropZone
-            severity="pass"
-            metrics={passMetrics}
-            onDrop={onUpdateSeverity}
-            onDismiss={onDismiss}
-            onRestore={onRestore}
-            onMetricHighlight={onMetricHighlight}
-            highlightedMetric={highlightedMetric}
-          />
+          <DropZone severity="critical" metrics={criticalMetrics} onDrop={onUpdateSeverity} onDismiss={onDismiss} onRestore={onRestore} />
+          <DropZone severity="warning"  metrics={warningMetrics}  onDrop={onUpdateSeverity} onDismiss={onDismiss} onRestore={onRestore} />
+          <DropZone severity="pass"     metrics={passMetrics}     onDrop={onUpdateSeverity} onDismiss={onDismiss} onRestore={onRestore} />
         </div>
       </div>
     </DndProvider>

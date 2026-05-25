@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AlertCircle, AlertTriangle, MinusCircle, ZoomIn, X } from 'lucide-react';
-import type { AnalysisResult, MetricResult, Severity } from '../types';
+import type { AnalysisResult, Severity } from '../types';
 import { getScoreLabel } from '../types';
 import { CompositeScoreChart } from './CompositeScoreChart';
 import { MetricsDragBoard } from './MetricsDragBoard';
@@ -14,14 +14,6 @@ interface AnalysisTabProps {
   onUpdateSeverity: (metricName: string, newSeverity: Severity) => void;
 }
 
-function severityOverlayClass(severity: string): string {
-  switch (severity) {
-    case 'critical': return 'border-red-500 bg-red-400/20';
-    case 'warning':  return 'border-amber-500 bg-amber-400/20';
-    default:         return 'border-green-500 bg-green-400/20';
-  }
-}
-
 export function AnalysisTab({
   analysis,
   previousAnalysis,
@@ -31,9 +23,6 @@ export function AnalysisTab({
 }: AnalysisTabProps) {
   const dismissedCount = analysis.metrics.filter(m => m.isDismissed).length;
   const [isImageOpen, setIsImageOpen] = useState(false);
-  const [highlightedMetric, setHighlightedMetric] = useState<MetricResult | null>(null);
-
-  const overlayClass = highlightedMetric ? severityOverlayClass(highlightedMetric.severity) : '';
 
   return (
     <div className="space-y-6">
@@ -48,7 +37,6 @@ export function AnalysisTab({
           >
             <X className="w-5 h-5" />
           </button>
-          {/* Full-size image with flagged location overlays */}
           <div
             className="relative max-w-[90vw] max-h-[90vh]"
             onClick={(e) => e.stopPropagation()}
@@ -58,18 +46,6 @@ export function AnalysisTab({
               alt="Analyzed diagram – full size"
               className="max-w-[90vw] max-h-[90vh] object-contain rounded shadow-2xl"
             />
-            {highlightedMetric?.flaggedLocations.map((loc, i) => (
-              <div
-                key={i}
-                className={`absolute border-2 rounded pointer-events-none ${overlayClass}`}
-                style={{
-                  left: `${loc.x}%`,
-                  top: `${loc.y}%`,
-                  width: `${loc.width}%`,
-                  height: `${loc.height}%`,
-                }}
-              />
-            ))}
           </div>
         </div>
       )}
@@ -84,32 +60,16 @@ export function AnalysisTab({
 
         <Card className="lg:col-span-2 p-6">
           <div className="flex items-start gap-4 mb-6">
-            {/* Diagram thumbnail with hover-to-highlight overlay */}
             <div
               className="relative w-32 h-32 flex-shrink-0 group cursor-zoom-in"
               onClick={() => setIsImageOpen(true)}
-              title={highlightedMetric
-                ? `Showing flagged locations for "${highlightedMetric.name}" — click to zoom`
-                : 'Click to view full size'}
+              title="Click to view full size"
             >
               <img
                 src={analysis.imageData}
                 alt="Analyzed diagram"
                 className="w-full h-full object-contain border rounded"
               />
-              {/* Flagged location overlays */}
-              {highlightedMetric?.flaggedLocations.map((loc, i) => (
-                <div
-                  key={i}
-                  className={`absolute border-2 rounded pointer-events-none ${overlayClass}`}
-                  style={{
-                    left: `${loc.x}%`,
-                    top: `${loc.y}%`,
-                    width: `${loc.width}%`,
-                    height: `${loc.height}%`,
-                  }}
-                />
-              ))}
               <div className="absolute inset-0 flex items-center justify-center rounded bg-black/0 group-hover:bg-black/30 transition-colors">
                 <ZoomIn className="w-7 h-7 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
               </div>
@@ -164,8 +124,6 @@ export function AnalysisTab({
           onUpdateSeverity={onUpdateSeverity}
           onDismiss={onDismissMetric}
           onRestore={onRestoreMetric}
-          onMetricHighlight={setHighlightedMetric}
-          highlightedMetric={highlightedMetric}
         />
       </div>
     </div>
