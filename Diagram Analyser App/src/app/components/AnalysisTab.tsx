@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { AlertCircle, AlertTriangle, MinusCircle, ZoomIn, X } from 'lucide-react';
-import type { AnalysisResult, Severity } from '../types';
+import type { AnalysisResult, MetricResult, Severity } from '../types';
 import { getScoreLabel } from '../types';
 import { CompositeScoreChart } from './CompositeScoreChart';
 import { MetricsDragBoard } from './MetricsDragBoard';
@@ -14,6 +14,115 @@ interface AnalysisTabProps {
   onUpdateSeverity: (metricName: string, newSeverity: Severity) => void;
 }
 
+interface OverlayRect { x: number; y: number; width: number; height: number; }
+
+function severityColors(severity: string): { fill: string; stroke: string } {
+  switch (severity) {
+    case 'critical': return { fill: 'rgba(239,68,68,0.25)',  stroke: 'rgb(239,68,68)' };
+    case 'warning':  return { fill: 'rgba(245,158,11,0.25)', stroke: 'rgb(245,158,11)' };
+    default:         return { fill: 'rgba(34,197,94,0.25)',  stroke: 'rgb(34,197,94)' };
+  }
+}
+
+/**
+ * Image with SVG overlay rectangles that are always pixel-perfect.
+ *
+ * The trick: an <svg> with viewBox matching the image's natural dimensions
+ * and preserveAspectRatio="xMidYMid meet" uses exactly the same scaling
+ * algorithm as CSS object-contain. The two coordinate spaces align perfectly,
+ * so rect coordinates derived from the original image pixels land in the
+ * right place — no getBoundingClientRect, no ResizeObserver, no CSS tricks.
+ */
+function DiagramWithOverlays({
+  src,
+  alt,
+  flaggedLocations,
+  severity,
+  maxW,
+  maxH,
+  imgClass,
+  outerClass,
+  onClick,
+  title,
+  children,
+}: {
+  src: string;
+  alt: string;
+  flaggedLocations: OverlayRect[];
+  severity: string;
+  maxW: number;
+  maxH: number;
+  imgClass?: string;
+  outerClass?: string;
+  onClick?: () => void;
+  title?: string;
+  children?: React.ReactNode;
+}) {
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [nat, setNat] = useState<{ w: number; h: number } | null>(null);
+
+  // Capture naturalWidth/Height after load. Also check on mount in case
+  // the browser already decoded the base64 image before this render.
+  useEffect(() => {
+    const img = imgRef.current;
+    if (img?.naturalWidth) setNat({ w: img.naturalWidth, h: img.naturalHeight });
+  }, []);
+
+  const { fill, stroke } = severityColors(severity);
+
+  return (
+    <div
+      className={`relative flex items-center justify-center overflow-hidden ${outerClass ?? ''}`}
+      onClick={onClick}
+      title={title}
+    >
+      <img
+        ref={imgRef}
+        src={src}
+        alt={alt}
+        className={`block ${imgClass ?? ''}`}
+        style={{ maxWidth: maxW, maxHeight: maxH }}
+        onLoad={(e) => {
+          const img = e.currentTarget;
+          setNat({ w: img.naturalWidth, h: img.naturalHeight });
+        }}
+      />
+
+      {/*
+        SVG fills the outer div (absolute inset-0). Its viewBox matches the
+        image's natural pixel dimensions. preserveAspectRatio="xMidYMid meet"
+        is identical to CSS object-contain — scale to fit, centre. So SVG
+        coordinates in natural-pixel space land exactly on the right pixels.
+      */}
+      {nat && flaggedLocations.length > 0 && (
+        <svg
+          viewBox={`0 0 ${nat.w} ${nat.h}`}
+          preserveAspectRatio="xMidYMid meet"
+          className="absolute inset-0 pointer-events-none"
+          style={{ width: '100%', height: '100%' }}
+        >
+          {flaggedLocations.map((loc, i) => (
+            <rect
+              key={i}
+              x={loc.x / 100 * nat.w}
+              y={loc.y / 100 * nat.h}
+              width={loc.width  / 100 * nat.w}
+              height={loc.height / 100 * nat.h}
+              fill={fill}
+              stroke={stroke}
+              strokeWidth={2}
+              vectorEffect="non-scaling-stroke"
+              rx={3}
+            />
+          ))}
+        </svg>
+      )}
+
+      {children}
+    </div>
+  );
+}
+
 export function AnalysisTab({
   analysis,
   previousAnalysis,
@@ -23,9 +132,34 @@ export function AnalysisTab({
 }: AnalysisTabProps) {
   const dismissedCount = analysis.metrics.filter(m => m.isDismissed).length;
   const [isImageOpen, setIsImageOpen] = useState(false);
+  const [highlightedMetric, setHighlightedMetric] = useState<MetricResult | null>(null);
+
+  const flaggedLocations  = highlightedMetric?.flaggedLocations ?? [];
+  const severity          = highlightedMetric?.severity ?? 'pass';
+  const showFloating      = highlightedMetric !== null && flaggedLocations.length > 0;
 
   return (
     <div className="space-y-6">
+
+      {/* Floating preview — fixed bottom-right, always visible while hovering */}
+      {showFloating && (
+        <div className="fixed bottom-6 right-6 z-40 shadow-2xl rounded-lg overflow-hidden border-2 border-blue-400 bg-white">
+          <div className="text-xs font-medium text-blue-700 bg-blue-50 px-2 py-1 border-b border-blue-200 truncate max-w-[220px]">
+            {highlightedMetric!.name}
+          </div>
+          <DiagramWithOverlays
+            src={analysis.imageData}
+            alt="Flagged location preview"
+            flaggedLocations={flaggedLocations}
+            severity={severity}
+            maxW={224}
+            maxH={176}
+            outerClass="w-56 h-44 bg-white"
+          />
+        </div>
+      )}
+
+      {/* Full-screen modal */}
       {isImageOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
@@ -38,13 +172,17 @@ export function AnalysisTab({
             <X className="w-5 h-5" />
           </button>
           <div
-            className="relative max-w-[90vw] max-h-[90vh]"
+            className="relative"
             onClick={(e) => e.stopPropagation()}
           >
-            <img
+            <DiagramWithOverlays
               src={analysis.imageData}
               alt="Analyzed diagram – full size"
-              className="max-w-[90vw] max-h-[90vh] object-contain rounded shadow-2xl"
+              flaggedLocations={flaggedLocations}
+              severity={severity}
+              maxW={Math.round(window.innerWidth  * 0.9)}
+              maxH={Math.round(window.innerHeight * 0.9)}
+              imgClass="rounded shadow-2xl"
             />
           </div>
         </div>
@@ -60,20 +198,24 @@ export function AnalysisTab({
 
         <Card className="lg:col-span-2 p-6">
           <div className="flex items-start gap-4 mb-6">
-            <div
-              className="relative w-32 h-32 flex-shrink-0 group cursor-zoom-in"
+            <DiagramWithOverlays
+              src={analysis.imageData}
+              alt="Analyzed diagram"
+              flaggedLocations={flaggedLocations}
+              severity={severity}
+              maxW={128}
+              maxH={128}
+              imgClass="border rounded"
+              outerClass="w-32 h-32 flex-shrink-0 group cursor-zoom-in"
               onClick={() => setIsImageOpen(true)}
-              title="Click to view full size"
+              title={highlightedMetric
+                ? `Showing flagged area for "${highlightedMetric.name}" — click to zoom`
+                : 'Click to view full size'}
             >
-              <img
-                src={analysis.imageData}
-                alt="Analyzed diagram"
-                className="w-full h-full object-contain border rounded"
-              />
               <div className="absolute inset-0 flex items-center justify-center rounded bg-black/0 group-hover:bg-black/30 transition-colors">
                 <ZoomIn className="w-7 h-7 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
               </div>
-            </div>
+            </DiagramWithOverlays>
 
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
@@ -124,6 +266,8 @@ export function AnalysisTab({
           onUpdateSeverity={onUpdateSeverity}
           onDismiss={onDismissMetric}
           onRestore={onRestoreMetric}
+          onMetricHighlight={setHighlightedMetric}
+          highlightedMetric={highlightedMetric}
         />
       </div>
     </div>

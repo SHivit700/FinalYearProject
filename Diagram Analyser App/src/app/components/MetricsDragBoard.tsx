@@ -12,12 +12,15 @@ interface MetricsDragBoardProps {
   onUpdateSeverity: (metricName: string, newSeverity: Severity) => void;
   onDismiss: (metricName: string) => void;
   onRestore: (metricName: string) => void;
+  onMetricHighlight: (metric: MetricResult | null) => void;
+  highlightedMetric: MetricResult | null;
 }
 
 interface DraggableMetricProps {
   metric: MetricResult;
   onDismiss: (metricName: string) => void;
   onRestore: (metricName: string) => void;
+  onMetricHighlight: (metric: MetricResult | null) => void;
 }
 
 interface DropZoneProps {
@@ -26,6 +29,7 @@ interface DropZoneProps {
   onDrop: (metricName: string, newSeverity: Severity) => void;
   onDismiss: (metricName: string) => void;
   onRestore: (metricName: string) => void;
+  onMetricHighlight: (metric: MetricResult | null) => void;
 }
 
 const ITEM_TYPE = 'metric';
@@ -39,7 +43,7 @@ function toQuadrant(cx: number, cy: number): string {
   return `${v}-${h}`;
 }
 
-function DraggableMetric({ metric, onDismiss, onRestore }: DraggableMetricProps) {
+function DraggableMetric({ metric, onDismiss, onRestore, onMetricHighlight }: DraggableMetricProps) {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: ITEM_TYPE,
     item: { name: metric.name, currentSeverity: metric.severity },
@@ -81,6 +85,8 @@ function DraggableMetric({ metric, onDismiss, onRestore }: DraggableMetricProps)
       className={`bg-white border-l-4 ${getSeverityColor(metric.severity)} border border-gray-200 rounded-lg p-3 cursor-move hover:shadow-md transition-all ${
         isDragging ? 'opacity-50' : ''
       }`}
+      onMouseEnter={() => onMetricHighlight(metric)}
+      onMouseLeave={() => onMetricHighlight(null)}
     >
       <div className="flex items-start gap-2">
         <GripVertical className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
@@ -179,7 +185,7 @@ function DraggableMetric({ metric, onDismiss, onRestore }: DraggableMetricProps)
   );
 }
 
-function DropZone({ severity, metrics, onDrop, onDismiss, onRestore }: DropZoneProps) {
+function DropZone({ severity, metrics, onDrop, onDismiss, onRestore, onMetricHighlight }: DropZoneProps) {
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: ITEM_TYPE,
     drop: (item: { name: string; currentSeverity: Severity }) => {
@@ -259,6 +265,7 @@ function DropZone({ severity, metrics, onDrop, onDismiss, onRestore }: DropZoneP
             metric={metric}
             onDismiss={onDismiss}
             onRestore={onRestore}
+            onMetricHighlight={onMetricHighlight}
           />
         ))}
         {metrics.filter(m => !m.isDismissed).length === 0 && !isOver && (
@@ -276,6 +283,7 @@ export function MetricsDragBoard({
   onUpdateSeverity,
   onDismiss,
   onRestore,
+  onMetricHighlight,
 }: MetricsDragBoardProps) {
   const criticalMetrics = metrics.filter(m => m.severity === 'critical');
   const warningMetrics  = metrics.filter(m => m.severity === 'warning');
@@ -291,9 +299,9 @@ export function MetricsDragBoard({
         </div>
 
         <div className="flex gap-4 overflow-x-auto pb-4">
-          <DropZone severity="critical" metrics={criticalMetrics} onDrop={onUpdateSeverity} onDismiss={onDismiss} onRestore={onRestore} />
-          <DropZone severity="warning"  metrics={warningMetrics}  onDrop={onUpdateSeverity} onDismiss={onDismiss} onRestore={onRestore} />
-          <DropZone severity="pass"     metrics={passMetrics}     onDrop={onUpdateSeverity} onDismiss={onDismiss} onRestore={onRestore} />
+          <DropZone severity="critical" metrics={criticalMetrics} onDrop={onUpdateSeverity} onDismiss={onDismiss} onRestore={onRestore} onMetricHighlight={onMetricHighlight} />
+          <DropZone severity="warning"  metrics={warningMetrics}  onDrop={onUpdateSeverity} onDismiss={onDismiss} onRestore={onRestore} onMetricHighlight={onMetricHighlight} />
+          <DropZone severity="pass"     metrics={passMetrics}     onDrop={onUpdateSeverity} onDismiss={onDismiss} onRestore={onRestore} onMetricHighlight={onMetricHighlight} />
         </div>
       </div>
     </DndProvider>
