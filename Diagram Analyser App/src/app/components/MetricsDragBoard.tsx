@@ -112,26 +112,6 @@ function DraggableMetric({ metric, onDismiss, onRestore }: DraggableMetricProps)
 
           <p className="text-xs text-gray-600 mb-2 leading-relaxed">{metric.description}</p>
 
-          {METRIC_DEFINITIONS[metric.name as MetricName] && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  aria-label={`Learn more about ${metric.name}`}
-                  className="flex items-center gap-0.5 text-blue-400 hover:text-blue-600 transition-colors mb-2"
-                >
-                  <Info className="w-3 h-3" />
-                  <span className="text-xs">Learn more about this metric</span>
-                </button>
-              </PopoverTrigger>
-              <PopoverContent side="top" className="max-w-xs bg-white text-gray-800 border border-gray-200 shadow-lg p-3 rounded-lg">
-                <div className="space-y-2 text-xs">
-                  <p><span className="font-semibold">What it measures:</span> {METRIC_DEFINITIONS[metric.name as MetricName].whatItMeasures}</p>
-                  <p><span className="font-semibold">Why it matters:</span> {METRIC_DEFINITIONS[metric.name as MetricName].whyItMatters}</p>
-                </div>
-              </PopoverContent>
-            </Popover>
-          )}
-
           {metric.severity !== 'pass' && (() => {
             const uniqueQuadrants = Array.from(
               new Set(
@@ -173,6 +153,26 @@ function DraggableMetric({ metric, onDismiss, onRestore }: DraggableMetricProps)
               </div>
             );
           })()}
+
+          {METRIC_DEFINITIONS[metric.name as MetricName] && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  aria-label={`Learn more about ${metric.name}`}
+                  className="flex items-center gap-0.5 text-blue-400 hover:text-blue-600 transition-colors mt-2"
+                >
+                  <Info className="w-3 h-3" />
+                  <span className="text-xs">Learn more about this metric</span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="top" className="max-w-xs bg-white text-gray-800 border border-gray-200 shadow-lg p-3 rounded-lg">
+                <div className="space-y-2 text-xs">
+                  <p><span className="font-semibold">What it measures:</span> {METRIC_DEFINITIONS[metric.name as MetricName].whatItMeasures}</p>
+                  <p><span className="font-semibold">Why it matters:</span> {METRIC_DEFINITIONS[metric.name as MetricName].whyItMatters}</p>
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
         </div>
       </div>
     </div>
