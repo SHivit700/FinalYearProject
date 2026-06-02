@@ -373,19 +373,20 @@ def generate_rule_based_suggestions(
                 om_sev = "warning"
             else:
                 om_sev = "warning"
+            crowded_locs = om.get("per_label_info", [])
             if verdict == "crowded labels":
                 _add(
                     "overlap_metrics", om_sev, score,
                     f"Labels are crowded: {fclose:.0%} of labels are too close to a neighbour "
                     f"({any_iou:.2%} of label pairs physically overlap).",
-                    [],
+                    crowded_locs,
                     "Spread elements further apart, reduce label count, or increase diagram canvas size.",
                 )
             else:
                 _add(
                     "overlap_metrics", om_sev, score,
                     f"Moderate label crowding: {fclose:.0%} of labels are too close to a neighbour.",
-                    [],
+                    crowded_locs,
                     "Review crowded areas and consider increasing spacing between nearby labels.",
                 )
         else:
