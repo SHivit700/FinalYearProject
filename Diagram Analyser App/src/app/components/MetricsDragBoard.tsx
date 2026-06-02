@@ -112,8 +112,6 @@ function DraggableMetric({ metric, onDismiss, onRestore, onMetricHighlight, onOp
             </div>
           </div>
 
-          <p className="text-xs text-gray-600 mb-2 leading-relaxed">{metric.description}</p>
-
           {metric.severity !== 'pass' && (
             <div className="space-y-1.5">
               {metric.llmAnalysis ? (
