@@ -13,6 +13,7 @@ interface MetricsDragBoardProps {
   onDismiss: (metricName: string) => void;
   onRestore: (metricName: string) => void;
   onMetricHighlight: (metric: MetricResult | null) => void;
+  onOpenModal: (metric: MetricResult) => void;
   highlightedMetric: MetricResult | null;
 }
 
@@ -21,6 +22,7 @@ interface DraggableMetricProps {
   onDismiss: (metricName: string) => void;
   onRestore: (metricName: string) => void;
   onMetricHighlight: (metric: MetricResult | null) => void;
+  onOpenModal: (metric: MetricResult) => void;
 }
 
 interface DropZoneProps {
@@ -30,20 +32,12 @@ interface DropZoneProps {
   onDismiss: (metricName: string) => void;
   onRestore: (metricName: string) => void;
   onMetricHighlight: (metric: MetricResult | null) => void;
+  onOpenModal: (metric: MetricResult) => void;
 }
 
 const ITEM_TYPE = 'metric';
 
-function toQuadrant(cx: number, cy: number): string {
-  const h = cx < 33 ? 'left' : cx < 66 ? 'center' : 'right';
-  const v = cy < 33 ? 'top' : cy < 66 ? 'middle' : 'bottom';
-  if (h === 'center' && v === 'middle') return 'center';
-  if (h === 'center') return `${v} area`;
-  if (v === 'middle') return `${h} side`;
-  return `${v}-${h}`;
-}
-
-function DraggableMetric({ metric, onDismiss, onRestore, onMetricHighlight }: DraggableMetricProps) {
+function DraggableMetric({ metric, onDismiss, onRestore, onMetricHighlight, onOpenModal }: DraggableMetricProps) {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: ITEM_TYPE,
     item: { name: metric.name, currentSeverity: metric.severity },
@@ -82,11 +76,13 @@ function DraggableMetric({ metric, onDismiss, onRestore, onMetricHighlight }: Dr
   return (
     <div
       ref={drag}
-      className={`bg-white border-l-4 ${getSeverityColor(metric.severity)} border border-gray-200 rounded-lg p-3 cursor-move hover:shadow-md transition-all ${
+      className={`bg-white border-l-4 ${getSeverityColor(metric.severity)} border border-gray-200 rounded-lg p-3 cursor-pointer hover:shadow-md transition-all ${
         isDragging ? 'opacity-50' : ''
       }`}
       onMouseEnter={() => onMetricHighlight(metric)}
       onMouseLeave={() => onMetricHighlight(null)}
+      onClick={() => { onMetricHighlight(metric); onOpenModal(metric); }}
+      title="Click to view on diagram"
     >
       <div className="flex items-start gap-2">
         <GripVertical className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
@@ -108,7 +104,7 @@ function DraggableMetric({ metric, onDismiss, onRestore, onMetricHighlight }: Dr
                 variant="ghost"
                 size="sm"
                 className="h-6 w-6 p-0 text-gray-400 hover:text-red-500"
-                onClick={() => onDismiss(metric.name)}
+                onClick={(e) => { e.stopPropagation(); onDismiss(metric.name); }}
                 title="Dismiss this metric"
               >
                 <X className="w-3 h-3" />
@@ -118,47 +114,28 @@ function DraggableMetric({ metric, onDismiss, onRestore, onMetricHighlight }: Dr
 
           <p className="text-xs text-gray-600 mb-2 leading-relaxed">{metric.description}</p>
 
-          {metric.severity !== 'pass' && (() => {
-            const uniqueQuadrants = Array.from(
-              new Set(
-                metric.flaggedLocations.map(loc =>
-                  toQuadrant(loc.x + loc.width / 2, loc.y + loc.height / 2)
-                )
-              )
-            ).slice(0, 3);
-            return (
-              <div className="space-y-1.5">
-                {metric.llmAnalysis ? (
-                  <>
-                    <div className="bg-blue-50 border border-blue-200 rounded p-2">
-                      <p className="text-xs font-semibold text-blue-800 mb-0.5">Where to look</p>
-                      <p className="text-xs text-blue-700">{metric.llmAnalysis.where}</p>
-                    </div>
-                    <div className="bg-amber-50 border border-amber-200 rounded p-2">
-                      <p className="text-xs font-semibold text-amber-800 mb-0.5">How to fix</p>
-                      <p className="text-xs text-amber-700">{metric.llmAnalysis.howToFix}</p>
-                    </div>
-                  </>
-                ) : (
+          {metric.severity !== 'pass' && (
+            <div className="space-y-1.5">
+              {metric.llmAnalysis ? (
+                <>
                   <div className="bg-blue-50 border border-blue-200 rounded p-2">
-                    <p className="text-xs text-gray-700">
-                      <span className="font-medium">Fix:</span> {metric.recommendation}
-                    </p>
+                    <p className="text-xs font-semibold text-blue-800 mb-0.5">Where to look</p>
+                    <p className="text-xs text-blue-700">{metric.llmAnalysis.where}</p>
                   </div>
-                )}
-                {uniqueQuadrants.length > 0 && (
-                  <div className="bg-gray-50 border border-gray-200 rounded p-2">
-                    <p className="text-xs font-medium text-gray-500 mb-0.5">Areas to check:</p>
-                    <ol className="list-decimal list-inside space-y-0.5">
-                      {uniqueQuadrants.map((q, i) => (
-                        <li key={i} className="text-xs text-gray-600">{q}</li>
-                      ))}
-                    </ol>
+                  <div className="bg-amber-50 border border-amber-200 rounded p-2">
+                    <p className="text-xs font-semibold text-amber-800 mb-0.5">How to fix</p>
+                    <p className="text-xs text-amber-700">{metric.llmAnalysis.howToFix}</p>
                   </div>
-                )}
-              </div>
-            );
-          })()}
+                </>
+              ) : (
+                <div className="bg-blue-50 border border-blue-200 rounded p-2">
+                  <p className="text-xs text-gray-700">
+                    <span className="font-medium">Fix:</span> {metric.recommendation}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {METRIC_DEFINITIONS[metric.name as MetricName] && (
             <Popover>
@@ -166,6 +143,7 @@ function DraggableMetric({ metric, onDismiss, onRestore, onMetricHighlight }: Dr
                 <button
                   aria-label={`Learn more about ${metric.name}`}
                   className="flex items-center gap-0.5 text-blue-400 hover:text-blue-600 transition-colors mt-2"
+                  onClick={(e) => e.stopPropagation()}
                 >
                   <Info className="w-3 h-3" />
                   <span className="text-xs">Learn more about this metric</span>
@@ -185,7 +163,7 @@ function DraggableMetric({ metric, onDismiss, onRestore, onMetricHighlight }: Dr
   );
 }
 
-function DropZone({ severity, metrics, onDrop, onDismiss, onRestore, onMetricHighlight }: DropZoneProps) {
+function DropZone({ severity, metrics, onDrop, onDismiss, onRestore, onMetricHighlight, onOpenModal }: DropZoneProps) {
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: ITEM_TYPE,
     drop: (item: { name: string; currentSeverity: Severity }) => {
@@ -266,6 +244,7 @@ function DropZone({ severity, metrics, onDrop, onDismiss, onRestore, onMetricHig
             onDismiss={onDismiss}
             onRestore={onRestore}
             onMetricHighlight={onMetricHighlight}
+            onOpenModal={onOpenModal}
           />
         ))}
         {metrics.filter(m => !m.isDismissed).length === 0 && !isOver && (
@@ -284,6 +263,7 @@ export function MetricsDragBoard({
   onDismiss,
   onRestore,
   onMetricHighlight,
+  onOpenModal,
 }: MetricsDragBoardProps) {
   const criticalMetrics = metrics.filter(m => m.severity === 'critical');
   const warningMetrics  = metrics.filter(m => m.severity === 'warning');
@@ -295,13 +275,14 @@ export function MetricsDragBoard({
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <p className="text-sm text-gray-700">
             <span className="font-medium">Drag and drop</span> metrics between columns to reclassify their severity.
+            {' '}Hover over a metric to preview where the issue lies on the diagram — click anywhere on a metric to enlarge it.
           </p>
         </div>
 
         <div className="flex gap-4 overflow-x-auto pb-4">
-          <DropZone severity="critical" metrics={criticalMetrics} onDrop={onUpdateSeverity} onDismiss={onDismiss} onRestore={onRestore} onMetricHighlight={onMetricHighlight} />
-          <DropZone severity="warning"  metrics={warningMetrics}  onDrop={onUpdateSeverity} onDismiss={onDismiss} onRestore={onRestore} onMetricHighlight={onMetricHighlight} />
-          <DropZone severity="pass"     metrics={passMetrics}     onDrop={onUpdateSeverity} onDismiss={onDismiss} onRestore={onRestore} onMetricHighlight={onMetricHighlight} />
+          <DropZone severity="critical" metrics={criticalMetrics} onDrop={onUpdateSeverity} onDismiss={onDismiss} onRestore={onRestore} onMetricHighlight={onMetricHighlight} onOpenModal={onOpenModal} />
+          <DropZone severity="warning"  metrics={warningMetrics}  onDrop={onUpdateSeverity} onDismiss={onDismiss} onRestore={onRestore} onMetricHighlight={onMetricHighlight} onOpenModal={onOpenModal} />
+          <DropZone severity="pass"     metrics={passMetrics}     onDrop={onUpdateSeverity} onDismiss={onDismiss} onRestore={onRestore} onMetricHighlight={onMetricHighlight} onOpenModal={onOpenModal} />
         </div>
       </div>
     </DndProvider>

@@ -197,6 +197,11 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
         "container_utilization_score": _container_utilization["image_metrics"][
             "container_utilization_score"
         ],
+        "empty_container_boxes": [
+            {"x": d["x"], "y": d["y"], "w": d["w"], "h": d["h"]}
+            for d in _container_utilization.get("box_details", [])
+            if d.get("is_empty_container_final", False)
+        ],
     }
 
     island_detection_output_path = (
@@ -282,6 +287,8 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
         labels=labels,
         output_path=str(edge_viz_output_path),
     )
+
+    features["image_shape"] = image_shape
 
     return {
         "image_path": str(image_path),

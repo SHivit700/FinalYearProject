@@ -30,6 +30,46 @@ _PROJECT_ROOT = Path(__file__).parent.parent
 
 _SEVERITY_ORDER = {"critical": 0, "warning": 1, "ok": 2}
 
+# ---------------------------------------------------------------------------
+# 10×10 spatial region vocabulary (10% boundary grid + spanning aliases)
+# Used by locate_issues_with_llm() to map LLM-returned names to % coordinates.
+# Cells are named r{row}-c{col}, 1-indexed from the top-left corner.
+# ---------------------------------------------------------------------------
+
+_CELL_SIZE = 10.0
+
+REGION_COORDS: dict[str, dict] = {
+    # 100 individual cells
+    **{
+        f"r{r}-c{c}": {"x": (c - 1) * 10.0, "y": (r - 1) * 10.0, "width": 10.0, "height": 10.0}
+        for r in range(1, 11)
+        for c in range(1, 11)
+    },
+    # Row spanning aliases (full width, 10% tall each)
+    **{f"row-{r}": {"x": 0.0, "y": (r - 1) * 10.0, "width": 100.0, "height": 10.0} for r in range(1, 11)},
+    # Column spanning aliases (10% wide, full height each)
+    **{f"col-{c}": {"x": (c - 1) * 10.0, "y": 0.0, "width": 10.0, "height": 100.0} for c in range(1, 11)},
+    # Half-diagram aliases
+    "top-half":    {"x": 0.0,  "y":  0.0, "width": 100.0, "height": 50.0},
+    "bottom-half": {"x": 0.0,  "y": 50.0, "width": 100.0, "height": 50.0},
+    "left-half":   {"x": 0.0,  "y":  0.0, "width": 50.0,  "height": 100.0},
+    "right-half":  {"x": 50.0, "y":  0.0, "width": 50.0,  "height": 100.0},
+    "full":        {"x": 0.0,  "y":  0.0, "width": 100.0, "height": 100.0},
+}
+
+_VALID_REGIONS = frozenset(REGION_COORDS.keys())
+
+
+def _parse_regions(raw: list[str]) -> list[dict]:
+    """Convert a list of raw LLM region name strings to coordinate dicts, dropping unknowns."""
+    result = []
+    for name in raw:
+        key = name.strip().lower().replace(" ", "-").replace("_", "-")
+        if key in _VALID_REGIONS:
+            result.append({"region": key, **REGION_COORDS[key]})
+    return result
+
+
 _METRIC_DISPLAY_NAMES = {
     "label_readability": "Label Readability",
     "label_area": "Label Area Ratio",
@@ -363,6 +403,29 @@ def generate_rule_based_suggestions(
                 parts.append(f"{lf:.0%} of labels")
             if sf > 0:
                 parts.append(f"{sf:.0%} of shapes")
+            # Visualise the margin zone as a border frame (4 thin strips along each
+            # edge) rather than the full bounding boxes of violating elements.
+            # Full bounding boxes of large shapes span most of the canvas and appear
+            # as a highlight "in the middle of the screen", which is confusing.
+            ec_locs: list[dict] = []
+            if img_shape:
+                H_img, W_img = img_shape[0], img_shape[1]
+                mf = ec.get("margin_fraction") or 0.05
+                margin_px = max(1, int(mf * min(W_img, H_img)))
+                ec_locs = [
+                    {"x1": 0, "y1": 0,
+                     "x2": W_img, "y2": margin_px,
+                     "detail": "top border margin — elements must stay below this zone"},
+                    {"x1": 0, "y1": H_img - margin_px,
+                     "x2": W_img, "y2": H_img,
+                     "detail": "bottom border margin — elements must stay above this zone"},
+                    {"x1": 0, "y1": 0,
+                     "x2": margin_px, "y2": H_img,
+                     "detail": "left border margin — elements must stay right of this zone"},
+                    {"x1": W_img - margin_px, "y1": 0,
+                     "x2": W_img, "y2": H_img,
+                     "detail": "right border margin — elements must stay left of this zone"},
+                ]
             _ec_t = threshold_manager.get_thresholds("edge_clearance")
             _ec_crit = _ec_t.get("critical_threshold")
             _ec_warn = _ec_t.get("warning_threshold")
@@ -375,7 +438,7 @@ def generate_rule_based_suggestions(
             _add(
                 "edge_clearance", ec_sev, score,
                 f"{' and '.join(parts)} are too close to the diagram boundary, risking clipping.",
-                [],
+                ec_locs,
                 "Move elements inward to maintain a clear margin around all diagram edges.",
             )
         else:
@@ -403,21 +466,35 @@ def generate_rule_based_suggestions(
     if isinstance(cu, dict):
         cu_score = cu.get("container_utilization_score")
         if cu_score is not None:
+            cu_locs = [
+                {
+                    "x1": b["x"], "y1": b["y"],
+                    "x2": b["x"] + b["w"], "y2": b["y"] + b["h"],
+                    "detail": "empty container — under-utilized",
+                }
+                for b in cu.get("empty_container_boxes", [])
+            ]
             _cu_t = threshold_manager.get_thresholds("container_utilization")
             _cu_crit = _cu_t.get("critical_threshold")
             _cu_warn = _cu_t.get("warning_threshold")
             if _cu_crit is not None and cu_score < _cu_crit:
                 _add(
                     "container_utilization", "critical", cu_score,
-                    f"Container utilization is very low ({cu_score:.1f}/100). Boxes are significantly under-used.",
-                    [],
+                    _build_spatial_issue(
+                        f"Container utilization is very low ({cu_score:.1f}/100). Boxes are significantly under-used.",
+                        cu_locs, img_shape,
+                    ),
+                    cu_locs,
                     "Add more content to containers, merge near-empty boxes, or remove unused containers.",
                 )
             elif _cu_warn is not None and cu_score < _cu_warn:
                 _add(
                     "container_utilization", "warning", cu_score,
-                    f"Container utilization is below optimal ({cu_score:.1f}/100). Some regions are sparse.",
-                    [],
+                    _build_spatial_issue(
+                        f"Container utilization is below optimal ({cu_score:.1f}/100). Some regions are sparse.",
+                        cu_locs, img_shape,
+                    ),
+                    cu_locs,
                     "Balance content across containers or consolidate sparse sections.",
                 )
             else:
@@ -431,6 +508,7 @@ def generate_rule_based_suggestions(
         ib_score = ib.get("isolated_box_score")
         island_count = ib.get("island_count", 0)
         if ib_score is not None:
+            img_area = (img_shape[0] * img_shape[1]) if img_shape else None
             locs = [
                 {
                     "x1": b["x"], "y1": b["y"],
@@ -438,6 +516,7 @@ def generate_rule_based_suggestions(
                     "detail": "isolated box — no connector lines detected",
                 }
                 for b in ib.get("island_boxes", [])
+                if not (img_area and (b["w"] * b["h"]) > 0.15 * img_area)
             ]
             _ib_t = threshold_manager.get_thresholds("isolated_boxes")
             _ib_crit = _ib_t.get("critical_threshold")
@@ -480,7 +559,7 @@ def generate_rule_based_suggestions(
                     "detail": f"text={p.get('text', '')!r} chars={p.get('char_count', '?')}",
                 }
                 for p in verbose_labels
-                if p.get("x1") is not None
+                if p.get("x1") is not None and p["x1"] < p["x2"] and p["y1"] < p["y2"]
             ]
             _brev_t = threshold_manager.get_thresholds("brevity")
             _brev_crit = _brev_t.get("critical_threshold")
@@ -577,7 +656,7 @@ def generate_rule_based_suggestions(
         if lc_score is not None:
             low_contrast = [
                 p for p in lcq.get("per_label_info", [])
-                if p.get("delta_L", 50.0) < 40.0 or p.get("delta_L", 50.0) > 80.0
+                if p.get("delta_L", 50.0) < 40.0
             ]
             locs = [
                 {
@@ -901,6 +980,144 @@ def synthesize_with_llm(
         return None
 
 
+def locate_issues_with_llm(
+    image_path: str | None,
+    suggestions: list[dict],
+    img_shape: tuple | None = None,
+) -> dict[str, list[dict]]:
+    """
+    One collective LLM vision call for metrics that have no pixel-level locations.
+
+    Returns a dict mapping metric key → list of region coordinate dicts.
+    Returns {} on any failure or when there is nothing to locate.
+    """
+    # Metrics whose problems are inherently diagram-wide (no meaningful spatial location).
+    # Sending these to the LLM always produces "full" or all-cell responses, which is
+    # useless as an overlay, so we exclude them entirely.
+    _GLOBAL_METRICS = {"color_harmony", "font_hierarchy", "label_area"}
+
+    # If the LLM's returned regions for a metric cumulatively cover more than this
+    # fraction of the image area, the result is too coarse to be useful and is discarded.
+    _MAX_COVERAGE_PCT = 40.0
+
+    try:
+        targets = [
+            s for s in suggestions
+            if s.get("severity") != "ok"
+            and not s.get("locations")
+            and s["metric"] not in _GLOBAL_METRICS
+        ]
+        if not targets or not image_path:
+            return {}
+
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(_PROJECT_ROOT / ".env")
+        except ImportError:
+            pass
+
+        from openai import OpenAI
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            logger.warning("locate_issues_with_llm skipped: OPENAI_API_KEY not set.")
+            return {}
+
+        import base64
+        img_bytes = Path(image_path).read_bytes()
+        image_b64 = base64.b64encode(img_bytes).decode()
+        suffix = Path(image_path).suffix.lower().lstrip(".")
+        mime = {"jpg": "jpeg", "jpeg": "jpeg"}.get(suffix, suffix) or "png"
+
+        model = os.getenv("OPENAI_VISION_MODEL", "gpt-4o-mini")
+        client = OpenAI(api_key=api_key)
+
+        target_keys = {s["metric"] for s in targets}
+
+        issues_block = ""
+        for s in targets:
+            issue_snippet = (s.get("issue") or "")[:120]
+            issues_block += (
+                f"- {s['metric']} [{s['severity'].upper()}, score={s['score']}]: "
+                f"{issue_snippet}\n"
+            )
+
+        system_prompt = (
+            "You are a spatial analysis assistant for diagram quality review.\n\n"
+            "The diagram is divided into a 10×10 grid. Rows 1-10 run top-to-bottom; "
+            "columns 1-10 run left-to-right. Each cell covers 10% of the image per dimension.\n"
+            "  r1-c1 = top-left corner   r1-c10 = top-right corner\n"
+            "  r10-c1 = bottom-left      r10-c10 = bottom-right\n\n"
+            "Cell names: \"r{row}-c{col}\" — e.g. \"r3-c7\", \"r5-c5\" (centre).\n\n"
+            "Spanning aliases (prefer these over listing many cells):\n"
+            "  \"row-1\" … \"row-10\"   full-width horizontal band\n"
+            "  \"col-1\" … \"col-10\"   full-height vertical band\n"
+            "  \"top-half\", \"bottom-half\", \"left-half\", \"right-half\"\n\n"
+            "RULES:\n"
+            "1. Return at most 5 entries per metric.\n"
+            "2. Pick only the regions where the problem is MOST concentrated.\n"
+            "3. If the issue has no clear spatial location (it is spread uniformly), "
+            "return [] (empty array) for that metric.\n"
+            "4. Do NOT return \"full\" — if you would return full, return [] instead.\n\n"
+            "Return ONLY a JSON object mapping metric_key to an array of region names (or []).\n"
+            "Do not include metrics not listed. Do not invent metric names.\n"
+            "Example: {\"whitespace_distribution\": [\"r2-c8\", \"r3-c8\"], "
+            "\"cognitive_chunk_density\": [\"row-3\", \"row-4\"]}"
+        )
+
+        user_content: list[dict] = [
+            {
+                "type": "text",
+                "text": f"Diagram quality issues to locate:\n\n{issues_block}\n\n"
+                        "Examine the diagram and return the JSON.",
+            },
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/{mime};base64,{image_b64}",
+                    "detail": "low",
+                },
+            },
+        ]
+
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.1,
+        )
+
+        raw = json.loads(response.choices[0].message.content)
+        result: dict[str, list[dict]] = {}
+        for key, regions in raw.items():
+            if key not in target_keys:
+                continue
+            if not isinstance(regions, list) or not regions:
+                continue
+            parsed = _parse_regions([str(r) for r in regions[:5]])
+            if not parsed:
+                continue
+            # Discard if cumulative area coverage is too large to be informative.
+            # Each region's coverage = (width * height) / 100  percent of the image.
+            total_coverage = sum(r["width"] * r["height"] / 100.0 for r in parsed)
+            if total_coverage > _MAX_COVERAGE_PCT:
+                logger.debug(
+                    "locate_issues_with_llm: dropping %s — coverage %.1f%% exceeds limit",
+                    key, total_coverage,
+                )
+                continue
+            result[key] = parsed
+
+        return result
+
+    except Exception as exc:
+        logger.warning("locate_issues_with_llm failed (%s): returning empty regions.", exc)
+        return {}
+
+
 # ---------------------------------------------------------------------------
 # Conversational chat helper
 # ---------------------------------------------------------------------------
@@ -1053,8 +1270,16 @@ def generate_suggestions(
     rule_based = generate_rule_based_suggestions(features, diagram_type, dismissed, img_shape=img_shape)
     composite_score = _compute_composite_score(features, dismissed)
 
+    llm_regions: dict[str, list[dict]] = {}
     llm_report = None
     if use_llm:
+        if image_path:
+            llm_regions = locate_issues_with_llm(image_path, rule_based, img_shape=img_shape)
+        # Assign "full" overlay for diagram-wide metrics excluded from the LLM spatial call
+        _FULL_REGION = {"region": "full", "x": 0.0, "y": 0.0, "width": 100.0, "height": 100.0}
+        for s in rule_based:
+            if s["metric"] in {"color_harmony", "font_hierarchy"} and s["severity"] != "ok":
+                llm_regions.setdefault(s["metric"], [_FULL_REGION])
         llm_report = synthesize_with_llm(
             rule_based,
             features,
@@ -1067,6 +1292,7 @@ def generate_suggestions(
     return {
         "rule_based": rule_based,
         "llm_report": llm_report,
+        "llm_regions": llm_regions,
         "critical_count": sum(1 for s in rule_based if s["severity"] == "critical"),
         "warning_count": sum(1 for s in rule_based if s["severity"] == "warning"),
         "composite_score": composite_score,

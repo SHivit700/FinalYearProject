@@ -126,6 +126,7 @@ def _suggestion_to_metric_result(
     image_shape: list | tuple,
     dismissed_py_keys: list[str],
     llm_analysis_index: dict[str, dict] | None = None,
+    llm_regions: dict[str, list[dict]] | None = None,
 ) -> dict:
     py_key = suggestion["metric"]
     react_name = PYTHON_KEY_TO_REACT_NAME.get(py_key, py_key)
@@ -137,6 +138,7 @@ def _suggestion_to_metric_result(
         "description":      suggestion.get("issue", ""),
         "recommendation":   suggestion.get("recommendation", ""),
         "flaggedLocations": _convert_locations(suggestion.get("locations", []), image_shape),
+        "llmRegions":       (llm_regions or {}).get(py_key, []),
         "isDismissed":      py_key in dismissed_py_keys,
     }
     if llm_analysis_index:
@@ -166,9 +168,10 @@ def _version_to_analysis_result(version: dict, session: dict) -> dict:
 
     llm = version.get("llm_report") or {}
     llm_analysis_index = _build_llm_analysis_index(llm)
+    llm_regions_map: dict = version.get("llm_regions") or {}
 
     metrics = [
-        _suggestion_to_metric_result(s, image_shape, dismissed_py, llm_analysis_index)
+        _suggestion_to_metric_result(s, image_shape, dismissed_py, llm_analysis_index, llm_regions_map)
         for s in version.get("suggestions", [])
     ]
 

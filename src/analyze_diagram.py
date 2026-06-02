@@ -203,6 +203,7 @@ def _analyze_new_version(
         "metric_scores": {k: v for k, v in metric_scores.items() if v is not None},
         "suggestions": suggestions_result["rule_based"],
         "llm_report": suggestions_result["llm_report"],
+        "llm_regions": suggestions_result.get("llm_regions", {}),
     }
     session["diagram_versions"].append(version_record)
     save_session(session, session_path)
@@ -465,6 +466,7 @@ def main() -> None:
         "metric_scores": {k: v for k, v in metric_scores.items() if v is not None},
         "suggestions": suggestions_result["rule_based"],
         "llm_report": suggestions_result["llm_report"],
+        "llm_regions": suggestions_result.get("llm_regions", {}),
     }
     session.setdefault("diagram_versions", []).append(version_record)
     session.setdefault("chat_history", [])

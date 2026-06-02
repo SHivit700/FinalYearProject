@@ -16,6 +16,22 @@ interface AnalysisTabProps {
 
 interface OverlayRect { x: number; y: number; width: number; height: number; }
 
+const VISUALIZATION_CAPTIONS: Record<string, string> = {
+  'Label Readability':       'Boxes highlight labels with low OCR confidence — text may be too small or blurry.',
+  'Label Area':              'Highlighted region shows where label coverage is too sparse or too cluttered.',
+  'Overlap (Crowding)':      'Highlighted region shows where labels are most densely packed or overlapping.',
+  'Edge Clearance':          'Highlighted strips show the required clear margin along each edge — elements inside must be moved inward.',
+  'Font Hierarchy':          'The entire diagram is highlighted — font hierarchy evaluates size consistency across all text labels collectively.',
+  'Container Utilisation':   'Highlighted boxes are containers identified as under-utilised or empty.',
+  'Isolated Boxes':          'Boxes highlight shapes with no connector lines detected.',
+  'Brevity':                 'Boxes highlight labels that exceed the recommended character length.',
+  'Whitespace Distribution': 'Highlighted region shows where whitespace is unevenly distributed.',
+  'Color Harmony':           'The entire diagram is highlighted — colour harmony evaluates the overall palette across all elements.',
+  'Label Contrast':          'Boxes highlight labels where text and background contrast is outside the optimal range.',
+  'Cognitive Chunk Density': 'Highlighted region shows the most visually dense area of the diagram.',
+  'Orientation Consistency': 'Highlighted region shows where label orientations are most inconsistent.',
+};
+
 function severityColors(severity: string): { fill: string; stroke: string } {
   switch (severity) {
     case 'critical': return { fill: 'rgba(239,68,68,0.25)',  stroke: 'rgb(239,68,68)' };
@@ -133,19 +149,45 @@ export function AnalysisTab({
   const dismissedCount = analysis.metrics.filter(m => m.isDismissed).length;
   const [isImageOpen, setIsImageOpen] = useState(false);
   const [highlightedMetric, setHighlightedMetric] = useState<MetricResult | null>(null);
+  const [modalMetric, setModalMetric] = useState<MetricResult | null>(null);
 
-  const flaggedLocations  = highlightedMetric?.flaggedLocations ?? [];
-  const severity          = highlightedMetric?.severity ?? 'pass';
-  const showFloating      = highlightedMetric !== null && flaggedLocations.length > 0;
+  const openModal = (metric: MetricResult | null) => {
+    setModalMetric(metric);
+    setIsImageOpen(true);
+  };
+  const closeModal = () => {
+    setIsImageOpen(false);
+    setModalMetric(null);
+  };
+
+  // Floating preview overlays — driven by hover, so they can freely change
+  const flaggedLocations: OverlayRect[] =
+    (highlightedMetric?.flaggedLocations?.length ?? 0) > 0
+      ? highlightedMetric!.flaggedLocations
+      : (highlightedMetric?.llmRegions ?? []);
+  const severity     = highlightedMetric?.severity ?? 'pass';
+  const showFloating = highlightedMetric !== null && flaggedLocations.length > 0;
+
+  // Modal overlays — frozen to modalMetric so mouse movement can't clear them
+  const modalFlaggedLocations: OverlayRect[] =
+    (modalMetric?.flaggedLocations?.length ?? 0) > 0
+      ? modalMetric!.flaggedLocations
+      : (modalMetric?.llmRegions ?? []);
+  const modalSeverity = modalMetric?.severity ?? 'pass';
 
   return (
     <div className="space-y-6">
 
       {/* Floating preview — fixed bottom-right, always visible while hovering */}
       {showFloating && (
-        <div className="fixed bottom-6 right-6 z-40 shadow-2xl rounded-lg overflow-hidden border-2 border-blue-400 bg-white">
-          <div className="text-xs font-medium text-blue-700 bg-blue-50 px-2 py-1 border-b border-blue-200 truncate max-w-[220px]">
-            {highlightedMetric!.name}
+        <div
+          className="fixed bottom-6 right-6 z-40 shadow-2xl rounded-lg overflow-hidden border-2 border-blue-400 bg-white cursor-zoom-in group"
+          onClick={() => openModal(highlightedMetric)}
+          title="Click to enlarge"
+        >
+          <div className="text-xs font-medium text-blue-700 bg-blue-50 px-2 py-1 border-b border-blue-200 truncate max-w-[220px] flex items-center justify-between gap-2">
+            <span>{highlightedMetric!.name}</span>
+            <ZoomIn className="w-3 h-3 text-blue-400 shrink-0" />
           </div>
           <DiagramWithOverlays
             src={analysis.imageData}
@@ -155,7 +197,16 @@ export function AnalysisTab({
             maxW={224}
             maxH={176}
             outerClass="w-56 h-44 bg-white"
-          />
+          >
+            <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/25 transition-colors">
+              <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+            </div>
+          </DiagramWithOverlays>
+          {VISUALIZATION_CAPTIONS[highlightedMetric!.name] && (
+            <p className="text-xs text-gray-600 px-2 py-1.5 border-t border-blue-100 leading-snug max-w-[224px]">
+              {VISUALIZATION_CAPTIONS[highlightedMetric!.name]}
+            </p>
+          )}
         </div>
       )}
 
@@ -163,11 +214,11 @@ export function AnalysisTab({
       {isImageOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
-          onClick={() => setIsImageOpen(false)}
+          onClick={closeModal}
         >
           <button
             className="absolute top-4 right-4 text-white bg-black/40 rounded-full p-1.5 hover:bg-black/60"
-            onClick={() => setIsImageOpen(false)}
+            onClick={closeModal}
           >
             <X className="w-5 h-5" />
           </button>
@@ -178,8 +229,8 @@ export function AnalysisTab({
             <DiagramWithOverlays
               src={analysis.imageData}
               alt="Analyzed diagram – full size"
-              flaggedLocations={flaggedLocations}
-              severity={severity}
+              flaggedLocations={modalFlaggedLocations}
+              severity={modalSeverity}
               maxW={Math.round(window.innerWidth  * 0.9)}
               maxH={Math.round(window.innerHeight * 0.9)}
               imgClass="rounded shadow-2xl"
@@ -201,15 +252,15 @@ export function AnalysisTab({
             <DiagramWithOverlays
               src={analysis.imageData}
               alt="Analyzed diagram"
-              flaggedLocations={flaggedLocations}
+              flaggedLocations={[]}
               severity={severity}
               maxW={128}
               maxH={128}
               imgClass="border rounded"
               outerClass="w-32 h-32 flex-shrink-0 group cursor-zoom-in"
-              onClick={() => setIsImageOpen(true)}
+              onClick={() => openModal(null)}
               title={highlightedMetric
-                ? `Showing flagged area for "${highlightedMetric.name}" — click to zoom`
+                ? `Hover preview visible bottom-right — click to zoom`
                 : 'Click to view full size'}
             >
               <div className="absolute inset-0 flex items-center justify-center rounded bg-black/0 group-hover:bg-black/30 transition-colors">
@@ -267,6 +318,7 @@ export function AnalysisTab({
           onDismiss={onDismissMetric}
           onRestore={onRestoreMetric}
           onMetricHighlight={setHighlightedMetric}
+          onOpenModal={(metric) => { setHighlightedMetric(metric); openModal(metric); }}
           highlightedMetric={highlightedMetric}
         />
       </div>
