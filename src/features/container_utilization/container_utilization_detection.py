@@ -371,6 +371,24 @@ def compute_container_utilization_metrics(
             and not c["is_empty_container_final"]
         )
 
+        # Tier classification for LLM candidate filtering.
+        # Tier 1 — auto-flag: large, very blank, zero mitigating signals present.
+        # Tier 2 — candidate: was flagged (or borderline) but has uncertainty that
+        #           only visual/semantic understanding (LLM) can resolve.
+        _conn_density = c.get("max_connector_density", 0.0)
+        _ocr_cnt      = c.get("ocr_text_count_inside", 0)
+        c["is_tier1_empty"] = (
+            c["is_empty_container_final"]
+            and c["empty_container_confidence"] >= 0.80
+            and _ocr_cnt == 0
+            and _conn_density < 0.08
+            and c["area_fraction"] >= T["large_box_area_fraction"]
+        )
+        c["is_tier2_candidate"] = (
+            (c["is_empty_container_final"] and not c["is_tier1_empty"])
+            or c["is_borderline"]
+        )
+
     # -----------------------------------------------------------------------
     # Image-level metrics
     # -----------------------------------------------------------------------
@@ -439,6 +457,8 @@ def compute_container_utilization_metrics(
             "is_grouping_container":  c.get("is_grouping_container", False),
             "is_empty_container_final": c.get("is_empty_container_final", False),
             "is_borderline":          c.get("is_borderline", False),
+            "is_tier1_empty":         c.get("is_tier1_empty", False),
+            "is_tier2_candidate":     c.get("is_tier2_candidate", False),
         })
 
     # -----------------------------------------------------------------------
@@ -448,7 +468,8 @@ def compute_container_utilization_metrics(
     if output_path is not None:
         # BGR colours matching the spec
         C_VALID    = (0, 200, 0)     # green   – valid, non-empty
-        C_EMPTY    = (0, 0, 220)     # red     – final empty (unutilized) container
+        C_EMPTY    = (0, 0, 220)     # red     – tier-1 auto-flagged empty
+        C_CAND     = (0, 215, 255)   # gold    – tier-2 candidate (awaiting LLM confirm)
         C_REJECTED = (0, 165, 255)   # orange  – rejected false box
         C_GROUP    = (255, 80, 0)    # blue    – grouping container
         C_BORDER   = (200, 0, 200)   # purple  – borderline / uncertain
@@ -464,9 +485,12 @@ def compute_container_utilization_metrics(
             if c.get("is_false_box_rejected", True):
                 color = C_REJECTED
                 tag   = "FALSE_BOX"
-            elif c.get("is_empty_container_final", False):
+            elif c.get("is_tier1_empty", False):
                 color = C_EMPTY
-                tag   = f"EMPTY {c['empty_container_confidence']:.2f}"
+                tag   = f"EMPTY-T1 {c['empty_container_confidence']:.2f}"
+            elif c.get("is_tier2_candidate", False):
+                color = C_CAND
+                tag   = f"CAND {c['empty_container_confidence']:.2f}"
             elif c.get("is_grouping_container", False):
                 color = C_GROUP
                 tag   = "GROUP_CONTAINER"
@@ -498,4 +522,14 @@ def compute_container_utilization_metrics(
         "image_metrics": image_metrics,
         "box_details":   box_details,
         "overlay_image": overlay_image,
+        "candidate_boxes": [
+            {
+                "x": c["x"], "y": c["y"], "w": c["w"], "h": c["h"],
+                "empty_container_confidence": c.get("empty_container_confidence", 0.0),
+                "ocr_text_count_inside": c.get("ocr_text_count_inside", 0),
+                "has_connector_endpoint_near_or_inside": c.get("has_connector_endpoint_near_or_inside", False),
+            }
+            for c in all_valid
+            if c.get("is_tier2_candidate", False)
+        ],
     }

@@ -197,10 +197,17 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
         "container_utilization_score": _container_utilization["image_metrics"][
             "container_utilization_score"
         ],
+        # Tier-1 boxes are auto-flagged (very blank, large, no connectors/OCR).
         "empty_container_boxes": [
             {"x": d["x"], "y": d["y"], "w": d["w"], "h": d["h"]}
             for d in _container_utilization.get("box_details", [])
-            if d.get("is_empty_container_final", False)
+            if d.get("is_tier1_empty", False)
+        ],
+        # Tier-2 boxes are ambiguous; the LLM confirms which are real issues.
+        "empty_container_candidate_boxes": [
+            {"x": d["x"], "y": d["y"], "w": d["w"], "h": d["h"]}
+            for d in _container_utilization.get("box_details", [])
+            if d.get("is_tier2_candidate", False)
         ],
     }
 

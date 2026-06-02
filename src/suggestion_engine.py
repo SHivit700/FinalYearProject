@@ -728,6 +728,16 @@ def generate_rule_based_suggestions(
         if oc_score is not None:
             dom_deg = oc.get("dominant_orientation_deg", 0.0)
             frac = oc.get("consistent_label_fraction", 0.0)
+            oc_locs: list[dict] = []
+            for lbl in oc.get("per_label_info", []):
+                if not lbl.get("consistent", True):
+                    oc_locs.append({
+                        "x1": int(lbl["x1"]),
+                        "y1": int(lbl["y1"]),
+                        "x2": int(lbl["x2"]),
+                        "y2": int(lbl["y2"]),
+                        "detail": f"text={lbl.get('text', '')!r} angle={lbl.get('angle_deg', 0):.1f}°",
+                    })
             _oc_t = threshold_manager.get_thresholds("orientation_consistency")
             _oc_crit = _oc_t.get("critical_threshold")
             _oc_warn = _oc_t.get("warning_threshold")
@@ -736,7 +746,7 @@ def generate_rule_based_suggestions(
                     "orientation_consistency", "critical", oc_score,
                     f"Label orientation is highly inconsistent (score={oc_score:.1f}/100). "
                     f"Only {frac:.0%} of labels follow the dominant orientation ({dom_deg:.1f}°).",
-                    [],
+                    oc_locs,
                     "Align all labels to a single orientation (preferably 0° horizontal). Avoid mixing horizontal and rotated text.",
                 )
             elif _oc_warn is not None and oc_score < _oc_warn:
@@ -744,7 +754,7 @@ def generate_rule_based_suggestions(
                     "orientation_consistency", "warning", oc_score,
                     f"Some labels deviate from the dominant orientation (score={oc_score:.1f}/100, "
                     f"dominant={dom_deg:.1f}°, consistent={frac:.0%}).",
-                    [],
+                    oc_locs,
                     "Standardise label orientation throughout the diagram.",
                 )
             else:
@@ -1123,6 +1133,132 @@ def locate_issues_with_llm(
 
 
 # ---------------------------------------------------------------------------
+# Container utilization — LLM visual confirmation of ambiguous candidates
+# ---------------------------------------------------------------------------
+
+def _confirm_containers_with_llm(
+    image_path: str,
+    candidate_boxes: list[dict],
+) -> list[dict]:
+    """
+    Use LLM vision to filter tier-2 candidate boxes down to genuinely
+    under-utilised containers.
+
+    Draws numbered bounding boxes on the diagram image (in-memory) and asks
+    the vision model to distinguish diagram nodes (expected blank interior)
+    from sections/containers that truly lack content.
+
+    Returns the subset of ``candidate_boxes`` confirmed as real issues.
+    On any failure returns the full candidate list so behaviour degrades
+    gracefully to the previous approach.
+    """
+    if not candidate_boxes:
+        return []
+
+    try:
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(_PROJECT_ROOT / ".env")
+        except ImportError:
+            pass
+
+        import base64
+        import cv2
+        import numpy as np
+        from openai import OpenAI
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            logger.warning("_confirm_containers_with_llm skipped: OPENAI_API_KEY not set.")
+            return candidate_boxes
+
+        img_bytes = Path(image_path).read_bytes()
+        img_arr = np.frombuffer(img_bytes, dtype=np.uint8)
+        bgr = cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
+        if bgr is None:
+            return candidate_boxes
+
+        annotated = bgr.copy()
+        COLOUR = (0, 0, 220)
+        FONT   = cv2.FONT_HERSHEY_SIMPLEX
+
+        for idx, box in enumerate(candidate_boxes, start=1):
+            bx, by, bw, bh = box["x"], box["y"], box["w"], box["h"]
+            cv2.rectangle(annotated, (bx, by), (bx + bw, by + bh), COLOUR, 2)
+            label = str(idx)
+            (tw, th), _ = cv2.getTextSize(label, FONT, 0.55, 1)
+            cv2.rectangle(annotated, (bx, by - th - 6), (bx + tw + 4, by), COLOUR, -1)
+            cv2.putText(annotated, label, (bx + 2, by - 4), FONT, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
+
+        suffix = Path(image_path).suffix.lower().lstrip(".")
+        enc_ext = suffix if suffix in ("png", "jpg", "jpeg") else "png"
+        _, enc = cv2.imencode(f".{enc_ext}", annotated)
+        image_b64 = base64.b64encode(enc.tobytes()).decode()
+        mime = {"jpg": "jpeg", "jpeg": "jpeg"}.get(suffix, suffix) or "png"
+
+        n = len(candidate_boxes)
+        system_prompt = (
+            "You are a diagram quality analyst. The image shows a diagram with numbered "
+            "red bounding boxes drawn by an automated tool that flagged these regions as "
+            "potentially under-utilised containers.\n\n"
+            "For each numbered box, decide:\n"
+            "  A) DIAGRAM NODE — a labelled entity (e.g. a service, database, user, actor, "
+            "component) whose interior is expected to contain only a short label. These are "
+            "NOT quality issues.\n"
+            "  B) EMPTY CONTAINER — a grouping box, section, or swim-lane that genuinely "
+            "lacks content and should have more items inside it. These ARE quality issues.\n\n"
+            "Return ONLY valid JSON: {\"confirmed_indices\": [<box numbers that are EMPTY CONTAINERS>]}\n"
+            "If none qualify, return {\"confirmed_indices\": []}\n"
+            "Do not include explanations."
+        )
+
+        user_content: list[dict] = [
+            {
+                "type": "text",
+                "text": (
+                    f"There are {n} numbered box(es) in the image. "
+                    "Which are genuinely empty containers (not just diagram nodes with labels)?"
+                ),
+            },
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/{mime};base64,{image_b64}",
+                    "detail": "low",
+                },
+            },
+        ]
+
+        model = os.getenv("OPENAI_VISION_MODEL", "gpt-4o-mini")
+        client = OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.1,
+        )
+
+        raw = json.loads(response.choices[0].message.content)
+        confirmed_indices: list[int] = [
+            int(i) for i in raw.get("confirmed_indices", [])
+            if isinstance(i, (int, float, str)) and str(i).strip().isdigit()
+        ]
+
+        return [
+            candidate_boxes[i - 1]
+            for i in confirmed_indices
+            if 1 <= i <= len(candidate_boxes)
+        ]
+
+    except Exception as exc:
+        logger.warning("_confirm_containers_with_llm failed (%s): keeping all candidates.", exc)
+        return candidate_boxes
+
+
+# ---------------------------------------------------------------------------
 # Conversational chat helper
 # ---------------------------------------------------------------------------
 
@@ -1270,6 +1406,23 @@ def generate_suggestions(
         composite_score_raw — Raw equal-weight score across all metrics
     """
     dismissed = session.get("permanently_dismissed", []) if session else []
+
+    # Resolve tier-2 container candidates via LLM before the rule-based pass so
+    # that the suggestion engine sees only confirmed empty containers.
+    if use_llm and image_path:
+        cu = features.get("container_utilization")
+        if isinstance(cu, dict):
+            candidates = cu.get("empty_container_candidate_boxes", [])
+            if candidates:
+                confirmed = _confirm_containers_with_llm(image_path, candidates)
+                tier1 = cu.get("empty_container_boxes", [])
+                final_boxes = tier1 + confirmed
+                cu["empty_container_boxes"] = final_boxes
+                # When LLM reviewed all candidates and confirmed none are genuine issues,
+                # reset the score so the metric correctly shows OK rather than warning
+                # with an empty overlay (the pre-LLM score still counted those boxes).
+                if not final_boxes:
+                    cu["container_utilization_score"] = 100
 
     rule_based = generate_rule_based_suggestions(features, diagram_type, dismissed, img_shape=img_shape)
     composite_score = _compute_composite_score(features, dismissed)
