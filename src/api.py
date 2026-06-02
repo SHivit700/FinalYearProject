@@ -149,6 +149,16 @@ def _suggestion_to_metric_result(
         result["flaggedLocations"] = [{"x": 0, "y": 0, "width": 100, "height": 100}]
     if suggestion.get("palette_colors"):
         result["paletteColors"] = suggestion["palette_colors"]
+    if py_key == "cognitive_chunk_density" and suggestion.get("chunk_centroids"):
+        H, W = image_shape[0], image_shape[1]
+        result["chunkCentroids"] = [
+            {
+                "cx": round(c["cx"] / W * 100, 2),
+                "cy": round(c["cy"] / H * 100, 2),
+                "displayLabel": c["displayLabel"],
+            }
+            for c in suggestion["chunk_centroids"]
+        ]
     return result
 
 

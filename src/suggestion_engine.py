@@ -251,6 +251,52 @@ def _build_spatial_issue(base: str, locs: list[dict],
     return f"{base}: {', '.join(parts)}" if parts else base
 
 
+def _find_parent_shape(cx: int, cy: int, shapes: list) -> dict | None:
+    """Return the smallest box-like shape that contains point (cx, cy), or None."""
+    containing = [
+        s for s in shapes
+        if s.get("x", 0) <= cx <= s.get("x", 0) + s.get("w", 0)
+        and s.get("y", 0) <= cy <= s.get("y", 0) + s.get("h", 0)
+        and s.get("w", 0) * s.get("h", 0) >= 4000
+        and s.get("rectangularity", 0.0) > 0.5
+        and s.get("aspect_ratio", 999.0) < 8.0
+        and not s.get("touches_border", False)
+    ]
+    if not containing:
+        return None
+    return min(containing, key=lambda s: s["w"] * s["h"])
+
+
+def _collect_brevity_candidates(verbose_labels: list[dict], shapes: list) -> list[dict]:
+    """Map verbose labels to their parent shapes, deduplicating by shape."""
+    seen: set[tuple] = set()
+    candidates: list[dict] = []
+    for p in verbose_labels:
+        if not (p.get("x1") is not None and p["x1"] < p["x2"] and p["y1"] < p["y2"]):
+            continue
+        cx = (p["x1"] + p["x2"]) // 2
+        cy = (p["y1"] + p["y2"]) // 2
+        parent = _find_parent_shape(cx, cy, shapes)
+        detail = f"text={p.get('text', '')!r} chars={p.get('char_count', '?')}"
+        if parent:
+            key = (parent["x"], parent["y"], parent["w"], parent["h"])
+            if key in seen:
+                continue
+            seen.add(key)
+            candidates.append({
+                "x": parent["x"], "y": parent["y"],
+                "w": parent["w"], "h": parent["h"],
+                "detail": detail,
+            })
+        else:
+            candidates.append({
+                "x": p["x1"], "y": p["y1"],
+                "w": p["x2"] - p["x1"], "h": p["y2"] - p["y1"],
+                "detail": detail,
+            })
+    return candidates
+
+
 def generate_rule_based_suggestions(
     features: dict,
     diagram_type: str = "system_design",
@@ -559,13 +605,20 @@ def generate_rule_based_suggestions(
         brev_score = brev.get("brevity_quality_score")
         if brev_score is not None:
             verbose_labels = [p for p in brev.get("per_label_info", []) if p.get("violates_brevity")]
+            confirmed = brev.get("confirmed_verbose_shapes")
+            if confirmed is not None:
+                # LLM-confirmed shapes from the pre-processing pass — use directly.
+                source = confirmed
+            else:
+                # No LLM pass — use deterministic candidate finding.
+                source = _collect_brevity_candidates(verbose_labels, features.get("shapes", []))
             locs = [
                 {
-                    "x1": p["x1"], "y1": p["y1"], "x2": p["x2"], "y2": p["y2"],
-                    "detail": f"text={p.get('text', '')!r} chars={p.get('char_count', '?')}",
+                    "x1": s["x"], "y1": s["y"],
+                    "x2": s["x"] + s["w"], "y2": s["y"] + s["h"],
+                    "detail": s.get("detail", ""),
                 }
-                for p in verbose_labels
-                if p.get("x1") is not None and p["x1"] < p["x2"] and p["y1"] < p["y2"]
+                for s in source
             ]
             _brev_t = threshold_manager.get_thresholds("brevity")
             _brev_crit = _brev_t.get("critical_threshold")
@@ -725,6 +778,9 @@ def generate_rule_based_suggestions(
                 _add("cognitive_chunk_density", "ok", cc_score, "Cognitive chunk density is manageable.", [], "")
         else:
             _add("cognitive_chunk_density", "ok", None, "Cognitive chunk score unavailable.", [], "")
+        # Attach centroids for frontend badge rendering (safe for all branches above).
+        if suggestions and suggestions[-1]["metric"] == "cognitive_chunk_density":
+            suggestions[-1]["chunk_centroids"] = ccd.get("chunk_centroids", [])
 
     # ── orientation_consistency ────────────────────────────────────────────
     oc = features.get("orientation_consistency")
@@ -1264,6 +1320,137 @@ def _confirm_containers_with_llm(
 
 
 # ---------------------------------------------------------------------------
+# Brevity — LLM visual confirmation of deterministic shape candidates
+# ---------------------------------------------------------------------------
+
+def _confirm_brevity_shapes_with_llm(
+    image_path: str,
+    candidate_shapes: list[dict],
+) -> list[dict]:
+    """
+    Use LLM vision to filter deterministically-found brevity candidates down to
+    genuine diagram elements, removing misdetected shapes like connector lines.
+
+    Draws numbered bounding boxes on the diagram and asks the vision model to
+    identify which are real diagram nodes vs detection artifacts.
+
+    Returns the confirmed subset. On any failure returns the full candidate list
+    so behaviour degrades gracefully to the deterministic-only approach.
+    """
+    if not candidate_shapes:
+        return []
+
+    try:
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(_PROJECT_ROOT / ".env")
+        except ImportError:
+            pass
+
+        import base64
+        import cv2
+        import numpy as np
+        from openai import OpenAI
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            logger.warning("_confirm_brevity_shapes_with_llm skipped: OPENAI_API_KEY not set.")
+            return candidate_shapes
+
+        img_bytes = Path(image_path).read_bytes()
+        img_arr = np.frombuffer(img_bytes, dtype=np.uint8)
+        bgr = cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
+        if bgr is None:
+            return candidate_shapes
+
+        annotated = bgr.copy()
+        COLOUR = (0, 0, 220)
+        FONT   = cv2.FONT_HERSHEY_SIMPLEX
+
+        for idx, shape in enumerate(candidate_shapes, start=1):
+            bx, by, bw, bh = shape["x"], shape["y"], shape["w"], shape["h"]
+            cv2.rectangle(annotated, (bx, by), (bx + bw, by + bh), COLOUR, 2)
+            label = str(idx)
+            (tw, th), _ = cv2.getTextSize(label, FONT, 0.55, 1)
+            cv2.rectangle(annotated, (bx, by - th - 6), (bx + tw + 4, by), COLOUR, -1)
+            cv2.putText(annotated, label, (bx + 2, by - 4), FONT, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
+
+        suffix = Path(image_path).suffix.lower().lstrip(".")
+        enc_ext = suffix if suffix in ("png", "jpg", "jpeg") else "png"
+        _, enc = cv2.imencode(f".{enc_ext}", annotated)
+        image_b64 = base64.b64encode(enc.tobytes()).decode()
+        mime = {"jpg": "jpeg", "jpeg": "jpeg"}.get(suffix, suffix) or "png"
+
+        n = len(candidate_shapes)
+        shape_label_lines = "\n".join(
+            f"  Box {idx}: {shape.get('detail', 'no text detected')}"
+            for idx, shape in enumerate(candidate_shapes, start=1)
+        )
+        system_prompt = (
+            "You are a diagram quality analyst. The image shows a diagram with numbered "
+            "blue bounding boxes. Each box was matched by an automated tool to a label that "
+            "may be overly verbose.\n\n"
+            "The OCR-detected label text associated with each box is:\n"
+            f"{shape_label_lines}\n\n"
+            "Confirm a box ONLY if BOTH conditions hold:\n"
+            "  1. Looking at the image, the text associated with that box visually appears "
+            "INSIDE (or directly on) the numbered box — not on a connector arrow or floating "
+            "nearby.\n"
+            "  2. The label text shown above is genuinely verbose — a sentence, paragraph, or "
+            "bullet list rather than a short concise identifier like 'API Gateway' or 'User'.\n\n"
+            "Return ONLY valid JSON: {\"confirmed_indices\": [<box numbers meeting BOTH conditions>]}\n"
+            "If none qualify, return {\"confirmed_indices\": []}\n"
+            "Do not include explanations."
+        )
+
+        user_content: list[dict] = [
+            {
+                "type": "text",
+                "text": (
+                    f"There are {n} numbered box(es) in the image. "
+                    "Confirm only boxes whose associated label text is genuinely verbose AND "
+                    "visually located inside the numbered box."
+                ),
+            },
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/{mime};base64,{image_b64}",
+                    "detail": "high",
+                },
+            },
+        ]
+
+        model = os.getenv("OPENAI_VISION_MODEL", "gpt-4o-mini")
+        client = OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.1,
+        )
+
+        raw = json.loads(response.choices[0].message.content)
+        confirmed_indices: list[int] = [
+            int(i) for i in raw.get("confirmed_indices", [])
+            if isinstance(i, (int, float, str)) and str(i).strip().isdigit()
+        ]
+
+        return [
+            candidate_shapes[i - 1]
+            for i in confirmed_indices
+            if 1 <= i <= len(candidate_shapes)
+        ]
+
+    except Exception as exc:
+        logger.warning("_confirm_brevity_shapes_with_llm failed (%s): keeping all candidates.", exc)
+        return candidate_shapes
+
+
+# ---------------------------------------------------------------------------
 # Conversational chat helper
 # ---------------------------------------------------------------------------
 
@@ -1428,6 +1615,19 @@ def generate_suggestions(
                 # with an empty overlay (the pre-LLM score still counted those boxes).
                 if not final_boxes:
                     cu["container_utilization_score"] = 100
+
+    # Resolve brevity shape candidates via LLM — filters out misdetected shapes
+    # (connector lines, arrows) before the rule-based pass builds flaggedLocations.
+    if use_llm and image_path:
+        brev = features.get("brevity")
+        if isinstance(brev, dict) and brev.get("brevity_quality_score") is not None:
+            verbose_labels = [p for p in brev.get("per_label_info", []) if p.get("violates_brevity")]
+            if verbose_labels:
+                candidates = _collect_brevity_candidates(verbose_labels, features.get("shapes", []))
+                if candidates:
+                    brev["confirmed_verbose_shapes"] = _confirm_brevity_shapes_with_llm(
+                        image_path, candidates
+                    )
 
     rule_based = generate_rule_based_suggestions(features, diagram_type, dismissed, img_shape=img_shape)
     composite_score = _compute_composite_score(features, dismissed)

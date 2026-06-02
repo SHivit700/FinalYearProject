@@ -16,6 +16,7 @@ export interface MetricResult {
   flaggedLocations: Array<{ x: number; y: number; width: number; height: number }>;
   llmRegions?: Array<{ region: string; x: number; y: number; width: number; height: number }>;
   paletteColors?: string[];
+  chunkCentroids?: Array<{ cx: number; cy: number; displayLabel: number }>;
   isDismissed: boolean;
   llmAnalysis?: { where: string; howToFix: string };
 }

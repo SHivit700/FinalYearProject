@@ -15,6 +15,7 @@ interface AnalysisTabProps {
 }
 
 interface OverlayRect { x: number; y: number; width: number; height: number; }
+interface ChunkCentroid { cx: number; cy: number; displayLabel: number; }
 
 const VISUALIZATION_CAPTIONS: Record<string, string | string[] | ((metric: MetricResult) => string | string[])> = {
   'Label Readability':       'Boxes highlight labels with low OCR confidence — text may be too small or blurry.',
@@ -39,11 +40,16 @@ const VISUALIZATION_CAPTIONS: Record<string, string | string[] | ((metric: Metri
     : `Use distinctly different sizes for titles, section headers, and body labels so readers can instantly gauge importance.`,
   'Container Utilisation':   'Highlighted boxes are containers identified as under-utilised or empty.',
   'Isolated Boxes':          'Boxes highlight shapes with no connector lines detected.',
-  'Brevity':                 'Boxes highlight labels that exceed the recommended character length.',
+  'Brevity':                 'Boxes highlight diagram elements containing overly verbose labels.',
   'Whitespace Distribution': 'Spread elements more evenly — move content from crowded areas into empty regions so no corner of the canvas feels abandoned.',
   'Color Harmony':           'Each dot shows where a detected colour falls on the hue wheel. Clustered dots = harmonious palette; spread-out dots = clashing colours.',
   'Label Contrast':          'Boxes highlight labels where text and background contrast is outside the optimal range.',
-  'Cognitive Chunk Density': 'Highlighted region shows the most visually dense area of the diagram.',
+  'Cognitive Chunk Density': (m) => {
+    const count = m.chunkCentroids?.length ?? 0;
+    return count > 0
+      ? `${count} perceptual chunk${count !== 1 ? 's' : ''} detected — optimal is 3–5. Numbered badges mark each chunk's centre.`
+      : 'Estimates how many distinct visual groups the diagram forms — optimal is 3–5.';
+  },
   'Orientation Consistency': 'Highlighted region shows where label orientations are most inconsistent.',
 };
 
@@ -90,6 +96,7 @@ function DiagramWithOverlays({
   src,
   alt,
   flaggedLocations,
+  chunkCentroids,
   severity,
   maxW,
   maxH,
@@ -102,6 +109,7 @@ function DiagramWithOverlays({
   src: string;
   alt: string;
   flaggedLocations: OverlayRect[];
+  chunkCentroids?: ChunkCentroid[];
   severity: string;
   maxW: number;
   maxH: number;
@@ -141,7 +149,7 @@ function DiagramWithOverlays({
         }}
       />
 
-      {nat && flaggedLocations.length > 0 && (
+      {nat && (flaggedLocations.length > 0 || (chunkCentroids?.length ?? 0) > 0) && (
         <svg
           viewBox={`0 0 ${nat.w} ${nat.h}`}
           preserveAspectRatio="xMidYMid meet"
@@ -162,6 +170,27 @@ function DiagramWithOverlays({
               rx={3}
             />
           ))}
+          {chunkCentroids?.map((c) => {
+            const cx = c.cx / 100 * nat.w;
+            const cy = c.cy / 100 * nat.h;
+            const r  = Math.min(nat.w, nat.h) * 0.028;
+            return (
+              <g key={c.displayLabel}>
+                <circle cx={cx} cy={cy} r={r} fill="white" stroke="#1e293b" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+                <text
+                  x={cx} y={cy}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fontSize={r * 0.9}
+                  fontWeight="bold"
+                  fill="#1e293b"
+                  fontFamily="system-ui, sans-serif"
+                >
+                  {c.displayLabel}
+                </text>
+              </g>
+            );
+          })}
         </svg>
       )}
 
@@ -268,18 +297,20 @@ export function AnalysisTab({
     setModalMetric(null);
   };
 
+  const _isCCD = (m: MetricResult | null) => m?.name === 'Cognitive Chunk Density';
+
   // Floating preview overlays — driven by hover, so they can freely change
-  const flaggedLocations: OverlayRect[] =
+  const flaggedLocations: OverlayRect[] = _isCCD(highlightedMetric) ? [] :
     (highlightedMetric?.flaggedLocations?.length ?? 0) > 0
       ? highlightedMetric!.flaggedLocations
       : (highlightedMetric?.llmRegions ?? []);
   const severity     = highlightedMetric?.severity ?? 'pass';
   const showFloating =
     highlightedMetric !== null &&
-    (flaggedLocations.length > 0 || (highlightedMetric.paletteColors?.length ?? 0) > 0);
+    (flaggedLocations.length > 0 || (highlightedMetric.paletteColors?.length ?? 0) > 0 || (highlightedMetric.chunkCentroids?.length ?? 0) > 0);
 
   // Modal overlays — frozen to modalMetric so mouse movement can't clear them
-  const modalFlaggedLocations: OverlayRect[] =
+  const modalFlaggedLocations: OverlayRect[] = _isCCD(modalMetric) ? [] :
     (modalMetric?.flaggedLocations?.length ?? 0) > 0
       ? modalMetric!.flaggedLocations
       : (modalMetric?.llmRegions ?? []);
@@ -306,6 +337,7 @@ export function AnalysisTab({
                 src={analysis.imageData}
                 alt="Flagged location preview"
                 flaggedLocations={flaggedLocations}
+                chunkCentroids={highlightedMetric?.chunkCentroids}
                 severity={severity}
                 maxW={224}
                 maxH={176}
@@ -346,6 +378,7 @@ export function AnalysisTab({
                   src={analysis.imageData}
                   alt="Analyzed diagram – full size"
                   flaggedLocations={modalFlaggedLocations}
+                  chunkCentroids={modalMetric?.chunkCentroids}
                   severity={modalSeverity}
                   maxW={Math.round(window.innerWidth  * 0.9)}
                   maxH={Math.round(window.innerHeight * 0.82)}

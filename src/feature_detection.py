@@ -296,6 +296,7 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
     )
 
     features["image_shape"] = image_shape
+    features["shapes"] = shapes
 
     return {
         "image_path": str(image_path),

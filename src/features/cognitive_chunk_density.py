@@ -125,6 +125,7 @@ def compute_cognitive_chunk_density(
         "singleton_count": None,
         "eps_used": None,
         "cluster_labels": None,
+        "chunk_centroids": [],
         "low_confidence": True,
         "degenerate_layout": False,
     }
@@ -163,7 +164,7 @@ def compute_cognitive_chunk_density(
 
     if effective_chunks == 0:
         # All nodes somehow invisible to DBSCAN — shouldn't happen, but guard.
-        return {**_null, "eps_used": round(eps, 2), "cluster_labels": raw_labels.tolist()}
+        return {**_null, "eps_used": round(eps, 2), "cluster_labels": raw_labels.tolist(), "chunk_centroids": []}
 
     if optimal_low <= effective_chunks <= optimal_high:
         raw_score = 100.0
@@ -176,6 +177,18 @@ def compute_cognitive_chunk_density(
 
     degenerate = singleton_count > 10
 
+    # Build one centroid per effective chunk, numbered 1…N for display.
+    chunk_centroids: list[dict[str, Any]] = []
+    display_num = 1
+    for cid in sorted(c for c in unique if c >= 0):
+        pts = centres_arr[raw_labels == cid]
+        cx, cy = float(pts[:, 0].mean()), float(pts[:, 1].mean())
+        chunk_centroids.append({"cx": cx, "cy": cy, "displayLabel": display_num})
+        display_num += 1
+    for pt in centres_arr[raw_labels == -1]:
+        chunk_centroids.append({"cx": float(pt[0]), "cy": float(pt[1]), "displayLabel": display_num})
+        display_num += 1
+
     return {
         "cognitive_chunk_score": round(raw_score, 2),
         "effective_chunks": effective_chunks,
@@ -183,6 +196,7 @@ def compute_cognitive_chunk_density(
         "singleton_count": singleton_count,
         "eps_used": round(eps, 2),
         "cluster_labels": raw_labels.tolist(),
+        "chunk_centroids": chunk_centroids,
         "low_confidence": False,
         "degenerate_layout": degenerate,
     }
@@ -224,6 +238,7 @@ def compute_cognitive_chunk_density_from_diagram(
             "singleton_count": None,
             "eps_used": None,
             "cluster_labels": None,
+            "chunk_centroids": [],
             "low_confidence": True,
             "degenerate_layout": False,
         }
