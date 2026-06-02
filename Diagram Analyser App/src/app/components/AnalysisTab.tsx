@@ -40,7 +40,7 @@ const VISUALIZATION_CAPTIONS: Record<string, string | string[] | ((metric: Metri
     : `Use distinctly different sizes for titles, section headers, and body labels so readers can instantly gauge importance.`,
   'Container Utilisation':   'Highlighted boxes are containers identified as under-utilised or empty.',
   'Isolated Boxes':          'Boxes highlight shapes with no connector lines detected.',
-  'Brevity':                 'Boxes highlight diagram elements containing overly verbose labels.',
+  'Brevity':                 'Boxes highlight diagram elements with overly verbose labels or too many labels crammed into one box.',
   'Whitespace Distribution': 'Spread elements more evenly — move content from crowded areas into empty regions so no corner of the canvas feels abandoned.',
   'Color Harmony':           'Each dot shows where a detected colour falls on the hue wheel. Clustered dots = harmonious palette; spread-out dots = clashing colours.',
   'Label Contrast':          'Boxes highlight labels where text and background contrast is outside the optimal range.',

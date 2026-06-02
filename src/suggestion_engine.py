@@ -297,6 +297,29 @@ def _collect_brevity_candidates(verbose_labels: list[dict], shapes: list) -> lis
     return candidates
 
 
+def _find_dense_boxes(shapes: list, per_label_info: list, density_threshold: float) -> list[dict]:
+    """Return bounding rects of top-level box shapes containing more labels than the threshold."""
+    box_shapes = [
+        s for s in shapes
+        if s.get("parent_contour_index", -1) in (-1, 0)
+        and s.get("rectangularity", 0.0) > 0.7
+        and s.get("aspect_ratio", 999.0) < 8.0
+        and s.get("w", 0) * s.get("h", 0) >= 4000
+    ]
+    centroids = [
+        ((lbl["x1"] + lbl["x2"]) // 2, (lbl["y1"] + lbl["y2"]) // 2)
+        for lbl in per_label_info
+        if lbl.get("x1") is not None
+    ]
+    dense = []
+    for s in box_shapes:
+        x, y, w, h = s["x"], s["y"], s["w"], s["h"]
+        count = sum(1 for cx, cy in centroids if x <= cx <= x + w and y <= cy <= y + h)
+        if count > density_threshold:
+            dense.append({"x": x, "y": y, "w": w, "h": h, "label_count": count})
+    return dense
+
+
 def generate_rule_based_suggestions(
     features: dict,
     diagram_type: str = "system_design",
@@ -604,45 +627,82 @@ def generate_rule_based_suggestions(
     if isinstance(brev, dict):
         brev_score = brev.get("brevity_quality_score")
         if brev_score is not None:
-            verbose_labels = [p for p in brev.get("per_label_info", []) if p.get("violates_brevity")]
+            all_label_info = brev.get("per_label_info", [])
+            verbose_labels = [p for p in all_label_info if p.get("violates_brevity")]
+            _brev_shapes = features.get("shapes", [])
+            _brev_th = brev.get("thresholds_used", {})
+
+            # Source 1: verbose individual labels → their parent shapes.
             confirmed = brev.get("confirmed_verbose_shapes")
             if confirmed is not None:
-                # LLM-confirmed shapes from the pre-processing pass — use directly.
-                source = confirmed
+                verbose_source = confirmed
             else:
-                # No LLM pass — use deterministic candidate finding.
-                source = _collect_brevity_candidates(verbose_labels, features.get("shapes", []))
-            locs = [
-                {
-                    "x1": s["x"], "y1": s["y"],
-                    "x2": s["x"] + s["w"], "y2": s["y"] + s["h"],
-                    "detail": s.get("detail", ""),
-                }
-                for s in source
-            ]
+                verbose_source = _collect_brevity_candidates(verbose_labels, _brev_shapes)
+
+            # Source 2: boxes that are too dense (too many labels crammed in).
+            density_threshold = _brev_th.get("density_threshold", 5.0)
+            dense_boxes = _find_dense_boxes(_brev_shapes, all_label_info, density_threshold)
+
+            # Merge both sources, deduplicating by bounding rect.
+            seen_rects: set[tuple] = set()
+            locs: list[dict] = []
+            for s in verbose_source:
+                key = (s["x"], s["y"], s["w"], s["h"])
+                if key not in seen_rects:
+                    seen_rects.add(key)
+                    locs.append({
+                        "x1": s["x"], "y1": s["y"],
+                        "x2": s["x"] + s["w"], "y2": s["y"] + s["h"],
+                        "detail": s.get("detail", ""),
+                    })
+            for b in dense_boxes:
+                key = (b["x"], b["y"], b["w"], b["h"])
+                if key not in seen_rects:
+                    seen_rects.add(key)
+                    locs.append({
+                        "x1": b["x"], "y1": b["y"],
+                        "x2": b["x"] + b["w"], "y2": b["y"] + b["h"],
+                        "detail": f"{b['label_count']} labels in box (density issue)",
+                    })
+
             _brev_t = threshold_manager.get_thresholds("brevity")
             _brev_crit = _brev_t.get("critical_threshold")
             _brev_warn = _brev_t.get("warning_threshold")
+            n_verbose = len(verbose_labels)
+            n_dense = len(dense_boxes)
             if _brev_crit is not None and brev_score < _brev_crit:
+                parts = []
+                if n_verbose:
+                    parts.append(f"{n_verbose} verbose label(s)")
+                if n_dense:
+                    parts.append(f"{n_dense} overcrowded box(es)")
+                detail_str = f" ({', '.join(parts)} detected)" if parts else ""
                 _add(
                     "brevity", "critical", brev_score,
                     _build_spatial_issue(
-                        f"Many labels are excessively long (score={brev_score:.1f}/100, "
-                        f"{len(verbose_labels)} verbose label(s) detected).",
+                        f"Many labels are excessively long or dense "
+                        f"(score={brev_score:.1f}/100{detail_str}).",
                         locs, img_shape,
                     ),
                     locs,
                     "Shorten labels to concise identifiers. Move detail to tooltips or a legend.",
                 )
             elif _brev_warn is not None and brev_score < _brev_warn:
+                parts = []
+                if n_verbose:
+                    parts.append(f"{n_verbose} verbose label(s)")
+                if n_dense:
+                    parts.append(f"{n_dense} overcrowded box(es)")
+                detail_str = f" ({', '.join(parts)} detected)" if parts else ""
                 _add(
                     "brevity", "warning", brev_score,
                     _build_spatial_issue(
-                        f"Some labels exceed recommended length (score={brev_score:.1f}/100).",
+                        f"Some labels exceed recommended length or density "
+                        f"(score={brev_score:.1f}/100{detail_str}).",
                         locs, img_shape,
                     ),
                     locs,
-                    "Trim verbose labels. Aim for ≤40 characters per label in system design diagrams.",
+                    "Trim verbose labels. Aim for ≤40 characters and ≤5 labels per box.",
                 )
             else:
                 _add("brevity", "ok", brev_score, "Labels are concise.", [], "")
