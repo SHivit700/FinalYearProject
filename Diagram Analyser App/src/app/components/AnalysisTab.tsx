@@ -25,7 +25,7 @@ const VISUALIZATION_CAPTIONS: Record<string, string> = {
   'Container Utilisation':   'Highlighted boxes are containers identified as under-utilised or empty.',
   'Isolated Boxes':          'Boxes highlight shapes with no connector lines detected.',
   'Brevity':                 'Boxes highlight labels that exceed the recommended character length.',
-  'Whitespace Distribution': 'Highlighted region shows where whitespace is unevenly distributed.',
+  'Whitespace Distribution': 'The whole diagram is highlighted because whitespace is unevenly distributed. Spread elements more evenly — move content from crowded areas into empty regions so no corner of the canvas feels abandoned.',
   'Color Harmony':           'The entire diagram is highlighted — colour harmony evaluates the overall palette across all elements.',
   'Label Contrast':          'Boxes highlight labels where text and background contrast is outside the optimal range.',
   'Cognitive Chunk Density': 'Highlighted region shows the most visually dense area of the diagram.',
@@ -104,12 +104,6 @@ function DiagramWithOverlays({
         }}
       />
 
-      {/*
-        SVG fills the outer div (absolute inset-0). Its viewBox matches the
-        image's natural pixel dimensions. preserveAspectRatio="xMidYMid meet"
-        is identical to CSS object-contain — scale to fit, centre. So SVG
-        coordinates in natural-pixel space land exactly on the right pixels.
-      */}
       {nat && flaggedLocations.length > 0 && (
         <svg
           viewBox={`0 0 ${nat.w} ${nat.h}`}
@@ -223,7 +217,7 @@ export function AnalysisTab({
             <X className="w-5 h-5" />
           </button>
           <div
-            className="relative"
+            className="flex flex-col items-center gap-3 max-w-[90vw]"
             onClick={(e) => e.stopPropagation()}
           >
             <DiagramWithOverlays
@@ -232,9 +226,14 @@ export function AnalysisTab({
               flaggedLocations={modalFlaggedLocations}
               severity={modalSeverity}
               maxW={Math.round(window.innerWidth  * 0.9)}
-              maxH={Math.round(window.innerHeight * 0.9)}
+              maxH={Math.round(window.innerHeight * 0.82)}
               imgClass="rounded shadow-2xl"
             />
+            {modalMetric && VISUALIZATION_CAPTIONS[modalMetric.name] && (
+              <p className="text-sm text-white/90 bg-black/50 rounded-lg px-4 py-2 text-center leading-snug max-w-xl">
+                {VISUALIZATION_CAPTIONS[modalMetric.name]}
+              </p>
+            )}
           </div>
         </div>
       )}

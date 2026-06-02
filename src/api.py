@@ -145,6 +145,8 @@ def _suggestion_to_metric_result(
         llm_data = llm_analysis_index.get(py_key)
         if llm_data:
             result["llmAnalysis"] = llm_data
+    if py_key == "whitespace_distribution" and not result["flaggedLocations"]:
+        result["flaggedLocations"] = [{"x": 0, "y": 0, "width": 100, "height": 100}]
     return result
 
 
