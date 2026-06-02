@@ -26,7 +26,7 @@ const VISUALIZATION_CAPTIONS: Record<string, string> = {
   'Isolated Boxes':          'Boxes highlight shapes with no connector lines detected.',
   'Brevity':                 'Boxes highlight labels that exceed the recommended character length.',
   'Whitespace Distribution': 'The whole diagram is highlighted because whitespace is unevenly distributed. Spread elements more evenly — move content from crowded areas into empty regions so no corner of the canvas feels abandoned.',
-  'Color Harmony':           'The entire diagram is highlighted — colour harmony evaluates the overall palette across all elements.',
+  'Color Harmony':           'Each dot shows where a detected colour falls on the hue wheel. Clustered dots = harmonious palette; spread-out dots = clashing colours.',
   'Label Contrast':          'Boxes highlight labels where text and background contrast is outside the optimal range.',
   'Cognitive Chunk Density': 'Highlighted region shows the most visually dense area of the diagram.',
   'Orientation Consistency': 'Highlighted region shows where label orientations are most inconsistent.',
@@ -133,6 +133,83 @@ function DiagramWithOverlays({
   );
 }
 
+function hexToHsl(hex: string): [number, number, number] {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l * 100];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h = 0;
+  if (max === r)      h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  else if (max === g) h = ((b - r) / d + 2) / 6;
+  else                h = ((r - g) / d + 4) / 6;
+  return [h * 360, s * 100, l * 100];
+}
+
+function hueSpread(palette: string[]): number {
+  if (palette.length < 2) return 0;
+  const hues = palette.map(h => hexToHsl(h)[0]).sort((a, b) => a - b);
+  let maxGap = 0;
+  for (let i = 0; i < hues.length; i++) {
+    const gap = (hues[(i + 1) % hues.length] - hues[i] + 360) % 360;
+    maxGap = Math.max(maxGap, gap);
+  }
+  return Math.round(360 - maxGap);
+}
+
+function HslColorWheelPanel({ palette, size = 200 }: { palette: string[]; size?: number }) {
+  const cx = size / 2, cy = size / 2;
+  const outerR = size / 2 - 4;
+  const innerR = outerR * 0.52;
+  const dotRadius = outerR * 0.72;
+  const spread = hueSpread(palette);
+
+  return (
+    <div className="flex flex-col items-center gap-2 p-3 bg-white">
+      <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
+        <div
+          className="absolute inset-0 rounded-full"
+          style={{ background: 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)' }}
+        />
+        <svg
+          className="absolute inset-0"
+          width={size}
+          height={size}
+          viewBox={`0 0 ${size} ${size}`}
+        >
+          <circle cx={cx} cy={cy} r={innerR} fill="white" />
+          {palette.map((hex, i) => {
+            const angle = (hexToHsl(hex)[0] - 90) * (Math.PI / 180);
+            const x = cx + dotRadius * Math.cos(angle);
+            const y = cy + dotRadius * Math.sin(angle);
+            return (
+              <g key={i}>
+                <circle cx={x} cy={y} r={size * 0.038} fill="white" />
+                <circle cx={x} cy={y} r={size * 0.030} fill={hex}>
+                  <title>{hex}</title>
+                </circle>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+      <div className="text-center leading-snug">
+        <p className="text-sm font-medium text-gray-700">
+          {palette.length} colour{palette.length !== 1 ? 's' : ''} detected
+        </p>
+        {palette.length > 1 && (
+          <p className="text-xs text-gray-500">
+            Spread: {spread}° — aim for &lt;90°
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function AnalysisTab({
   analysis,
   previousAnalysis,
@@ -160,7 +237,9 @@ export function AnalysisTab({
       ? highlightedMetric!.flaggedLocations
       : (highlightedMetric?.llmRegions ?? []);
   const severity     = highlightedMetric?.severity ?? 'pass';
-  const showFloating = highlightedMetric !== null && flaggedLocations.length > 0;
+  const showFloating =
+    highlightedMetric !== null &&
+    (flaggedLocations.length > 0 || (highlightedMetric.paletteColors?.length ?? 0) > 0);
 
   // Modal overlays — frozen to modalMetric so mouse movement can't clear them
   const modalFlaggedLocations: OverlayRect[] =
@@ -183,19 +262,24 @@ export function AnalysisTab({
             <span>{highlightedMetric!.name}</span>
             <ZoomIn className="w-3 h-3 text-blue-400 shrink-0" />
           </div>
-          <DiagramWithOverlays
-            src={analysis.imageData}
-            alt="Flagged location preview"
-            flaggedLocations={flaggedLocations}
-            severity={severity}
-            maxW={224}
-            maxH={176}
-            outerClass="w-56 h-44 bg-white"
-          >
-            <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/25 transition-colors">
-              <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
-            </div>
-          </DiagramWithOverlays>
+          {highlightedMetric!.name === 'Color Harmony' && highlightedMetric!.paletteColors?.length
+            ? <HslColorWheelPanel palette={highlightedMetric!.paletteColors} size={180} />
+            : (
+              <DiagramWithOverlays
+                src={analysis.imageData}
+                alt="Flagged location preview"
+                flaggedLocations={flaggedLocations}
+                severity={severity}
+                maxW={224}
+                maxH={176}
+                outerClass="w-56 h-44 bg-white"
+              >
+                <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/25 transition-colors">
+                  <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+                </div>
+              </DiagramWithOverlays>
+            )
+          }
           {VISUALIZATION_CAPTIONS[highlightedMetric!.name] && (
             <p className="text-xs text-gray-600 px-2 py-1.5 border-t border-blue-100 leading-snug max-w-[224px]">
               {VISUALIZATION_CAPTIONS[highlightedMetric!.name]}
@@ -220,15 +304,20 @@ export function AnalysisTab({
             className="flex flex-col items-center gap-3 max-w-[90vw]"
             onClick={(e) => e.stopPropagation()}
           >
-            <DiagramWithOverlays
-              src={analysis.imageData}
-              alt="Analyzed diagram – full size"
-              flaggedLocations={modalFlaggedLocations}
-              severity={modalSeverity}
-              maxW={Math.round(window.innerWidth  * 0.9)}
-              maxH={Math.round(window.innerHeight * 0.82)}
-              imgClass="rounded shadow-2xl"
-            />
+            {modalMetric?.name === 'Color Harmony' && modalMetric.paletteColors?.length
+              ? <HslColorWheelPanel palette={modalMetric.paletteColors} size={320} />
+              : (
+                <DiagramWithOverlays
+                  src={analysis.imageData}
+                  alt="Analyzed diagram – full size"
+                  flaggedLocations={modalFlaggedLocations}
+                  severity={modalSeverity}
+                  maxW={Math.round(window.innerWidth  * 0.9)}
+                  maxH={Math.round(window.innerHeight * 0.82)}
+                  imgClass="rounded shadow-2xl"
+                />
+              )
+            }
             {modalMetric && VISUALIZATION_CAPTIONS[modalMetric.name] && (
               <p className="text-sm text-white/90 bg-black/50 rounded-lg px-4 py-2 text-center leading-snug max-w-xl">
                 {VISUALIZATION_CAPTIONS[modalMetric.name]}

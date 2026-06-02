@@ -147,6 +147,8 @@ def _suggestion_to_metric_result(
             result["llmAnalysis"] = llm_data
     if py_key == "whitespace_distribution" and not result["flaggedLocations"]:
         result["flaggedLocations"] = [{"x": 0, "y": 0, "width": 100, "height": 100}]
+    if suggestion.get("palette_colors"):
+        result["paletteColors"] = suggestion["palette_colors"]
     return result
 
 

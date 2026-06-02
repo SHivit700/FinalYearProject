@@ -15,6 +15,7 @@ export interface MetricResult {
   recommendation: string;
   flaggedLocations: Array<{ x: number; y: number; width: number; height: number }>;
   llmRegions?: Array<{ region: string; x: number; y: number; width: number; height: number }>;
+  paletteColors?: string[];
   isDismissed: boolean;
   llmAnalysis?: { where: string; howToFix: string };
 }

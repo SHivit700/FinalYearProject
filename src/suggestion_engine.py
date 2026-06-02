@@ -638,6 +638,7 @@ def generate_rule_based_suggestions(
                     [],
                     "Reduce distinct colors and choose a harmonious palette (analogous or complementary scheme).",
                 )
+                suggestions[-1]["palette_colors"] = palette
             elif _ch_warn is not None and ch_score < _ch_warn:
                 _add(
                     "color_harmony", "warning", ch_score,
@@ -645,8 +646,10 @@ def generate_rule_based_suggestions(
                     [],
                     "Limit palette to 3-5 well-chosen colors and apply them consistently.",
                 )
+                suggestions[-1]["palette_colors"] = palette
             else:
                 _add("color_harmony", "ok", ch_score, "Color harmony is good.", [], "")
+                suggestions[-1]["palette_colors"] = palette
         else:
             _add("color_harmony", "ok", None, "Color harmony score unavailable.", [], "")
 
