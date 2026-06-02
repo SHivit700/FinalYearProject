@@ -27,7 +27,7 @@ const VISUALIZATION_CAPTIONS: Record<string, string | ((metric: MetricResult) =>
   'Container Utilisation':   'Highlighted boxes are containers identified as under-utilised or empty.',
   'Isolated Boxes':          'Boxes highlight shapes with no connector lines detected.',
   'Brevity':                 'Boxes highlight labels that exceed the recommended character length.',
-  'Whitespace Distribution': 'The whole diagram is highlighted because whitespace is unevenly distributed. Spread elements more evenly — move content from crowded areas into empty regions so no corner of the canvas feels abandoned.',
+  'Whitespace Distribution': 'Spread elements more evenly — move content from crowded areas into empty regions so no corner of the canvas feels abandoned.',
   'Color Harmony':           'Each dot shows where a detected colour falls on the hue wheel. Clustered dots = harmonious palette; spread-out dots = clashing colours.',
   'Label Contrast':          'Boxes highlight labels where text and background contrast is outside the optimal range.',
   'Cognitive Chunk Density': 'Highlighted region shows the most visually dense area of the diagram.',
