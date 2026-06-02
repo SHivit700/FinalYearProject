@@ -16,9 +16,22 @@ interface AnalysisTabProps {
 
 interface OverlayRect { x: number; y: number; width: number; height: number; }
 
-const VISUALIZATION_CAPTIONS: Record<string, string | ((metric: MetricResult) => string)> = {
+const VISUALIZATION_CAPTIONS: Record<string, string | string[] | ((metric: MetricResult) => string | string[])> = {
   'Label Readability':       'Boxes highlight labels with low OCR confidence — text may be too small or blurry.',
-  'Label Area':              'Highlighted region shows where label coverage is too sparse or too cluttered.',
+  'Label Area':              (m) => m.description.includes('sparse') ? [
+    'Label coverage is sparse.',
+    'The following changes may help improve your score:',
+    'Add labels to unlabelled shapes and connectors.',
+    'Use more descriptive text to give each element context.',
+    'Increase font size so labels take up more visual weight.',
+  ] : [
+    'Label coverage is too dense.',
+    'The following changes may help improve your score:',
+    'Remove redundant or duplicate labels.',
+    'Shorten label text to key terms only.',
+    'Expand the canvas or zoom out to give elements more room.',
+    'Merge related labels where possible.',
+  ],
   'Overlap (Crowding)':      'Highlighted region shows where labels are most densely packed or overlapping.',
   'Edge Clearance':          'Highlighted strips show the required clear margin along each edge — elements inside must be moved inward.',
   'Font Hierarchy':          (m) => m.severity === 'pass'
@@ -34,10 +47,26 @@ const VISUALIZATION_CAPTIONS: Record<string, string | ((metric: MetricResult) =>
   'Orientation Consistency': 'Highlighted region shows where label orientations are most inconsistent.',
 };
 
-function resolveCaption(metric: MetricResult): string | undefined {
+function resolveCaption(metric: MetricResult): string | string[] | undefined {
   const entry = VISUALIZATION_CAPTIONS[metric.name];
   if (!entry) return undefined;
   return typeof entry === 'function' ? entry(metric) : entry;
+}
+
+function CaptionBlock({ cap, className }: { cap: string | string[]; className: string }) {
+  if (Array.isArray(cap)) {
+    const [header, intro, ...items] = cap;
+    return (
+      <div className={className}>
+        <p className="font-medium mb-0.5">{header}</p>
+        {intro && <p className="italic mb-0.5">{intro}</p>}
+        <ul className="space-y-0.5">
+          {items.map((s, i) => <li key={i}>• {s}</li>)}
+        </ul>
+      </div>
+    );
+  }
+  return <p className={className}>{cap}</p>;
 }
 
 function severityColors(severity: string): { fill: string; stroke: string } {
@@ -289,9 +318,7 @@ export function AnalysisTab({
             )
           }
           {resolveCaption(highlightedMetric!) && (
-            <p className="text-xs text-gray-600 px-2 py-1.5 border-t border-blue-100 leading-snug max-w-[224px]">
-              {resolveCaption(highlightedMetric!)}
-            </p>
+            <CaptionBlock cap={resolveCaption(highlightedMetric!)!} className="text-xs text-gray-600 px-2 py-1.5 border-t border-blue-100 leading-snug max-w-[224px]" />
           )}
         </div>
       )}
@@ -327,9 +354,7 @@ export function AnalysisTab({
               )
             }
             {modalMetric && resolveCaption(modalMetric) && (
-              <p className="text-sm text-white/90 bg-black/50 rounded-lg px-4 py-2 text-center leading-snug max-w-xl">
-                {resolveCaption(modalMetric)}
-              </p>
+              <CaptionBlock cap={resolveCaption(modalMetric)!} className="text-sm text-white/90 bg-black/50 rounded-lg px-4 py-2 text-center leading-snug max-w-xl" />
             )}
           </div>
         </div>

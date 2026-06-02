@@ -342,13 +342,18 @@ def generate_rule_based_suggestions(
                 la_sev = "warning"
             else:
                 la_sev = "warning"
+            if img_shape is not None:
+                _H, _W = img_shape[0], img_shape[1]
+                la_locs: list[dict] = [{"x1": 0, "y1": 0, "x2": _W, "y2": _H, "detail": f"coverage is {cat}"}]
+            else:
+                la_locs = []
             _add(
                 "label_area", la_sev, score,
                 f"Label area ratio is {cat} (ratio={ratio:.3f}). "
                 + ("Labels cover too little of the diagram — many areas lack context."
                    if cat == "sparse" else
                    "Labels cover too much of the diagram — the layout feels cramped."),
-                [],
+                la_locs,
                 ("Add more labels or increase font size to improve coverage."
                  if cat == "sparse" else
                  "Reduce label density, shorten text, or increase diagram size."),
