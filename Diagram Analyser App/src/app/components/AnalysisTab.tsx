@@ -16,12 +16,14 @@ interface AnalysisTabProps {
 
 interface OverlayRect { x: number; y: number; width: number; height: number; }
 
-const VISUALIZATION_CAPTIONS: Record<string, string> = {
+const VISUALIZATION_CAPTIONS: Record<string, string | ((metric: MetricResult) => string)> = {
   'Label Readability':       'Boxes highlight labels with low OCR confidence — text may be too small or blurry.',
   'Label Area':              'Highlighted region shows where label coverage is too sparse or too cluttered.',
   'Overlap (Crowding)':      'Highlighted region shows where labels are most densely packed or overlapping.',
   'Edge Clearance':          'Highlighted strips show the required clear margin along each edge — elements inside must be moved inward.',
-  'Font Hierarchy':          'The entire diagram is highlighted — font hierarchy evaluates size consistency across all text labels collectively.',
+  'Font Hierarchy':          (m) => m.severity === 'pass'
+    ? `Font hierarchy looks good (score ${m.score.toFixed(0)}/100) — your labels have clearly distinct size tiers.`
+    : `Use distinctly different sizes for titles, section headers, and body labels so readers can instantly gauge importance.`,
   'Container Utilisation':   'Highlighted boxes are containers identified as under-utilised or empty.',
   'Isolated Boxes':          'Boxes highlight shapes with no connector lines detected.',
   'Brevity':                 'Boxes highlight labels that exceed the recommended character length.',
@@ -31,6 +33,12 @@ const VISUALIZATION_CAPTIONS: Record<string, string> = {
   'Cognitive Chunk Density': 'Highlighted region shows the most visually dense area of the diagram.',
   'Orientation Consistency': 'Highlighted region shows where label orientations are most inconsistent.',
 };
+
+function resolveCaption(metric: MetricResult): string | undefined {
+  const entry = VISUALIZATION_CAPTIONS[metric.name];
+  if (!entry) return undefined;
+  return typeof entry === 'function' ? entry(metric) : entry;
+}
 
 function severityColors(severity: string): { fill: string; stroke: string } {
   switch (severity) {
@@ -280,9 +288,9 @@ export function AnalysisTab({
               </DiagramWithOverlays>
             )
           }
-          {VISUALIZATION_CAPTIONS[highlightedMetric!.name] && (
+          {resolveCaption(highlightedMetric!) && (
             <p className="text-xs text-gray-600 px-2 py-1.5 border-t border-blue-100 leading-snug max-w-[224px]">
-              {VISUALIZATION_CAPTIONS[highlightedMetric!.name]}
+              {resolveCaption(highlightedMetric!)}
             </p>
           )}
         </div>
@@ -318,9 +326,9 @@ export function AnalysisTab({
                 />
               )
             }
-            {modalMetric && VISUALIZATION_CAPTIONS[modalMetric.name] && (
+            {modalMetric && resolveCaption(modalMetric) && (
               <p className="text-sm text-white/90 bg-black/50 rounded-lg px-4 py-2 text-center leading-snug max-w-xl">
-                {VISUALIZATION_CAPTIONS[modalMetric.name]}
+                {resolveCaption(modalMetric)}
               </p>
             )}
           </div>
