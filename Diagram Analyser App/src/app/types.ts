@@ -1,4 +1,4 @@
-export type DiagramType = 'system-design' | 'timeline-roadmap';
+export type DiagramType = 'system-design';
 
 export type Severity = 'critical' | 'warning' | 'pass';
 

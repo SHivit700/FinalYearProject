@@ -20,7 +20,6 @@ import { Card } from './components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Input } from './components/ui/input';
 import { Label } from './components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './components/ui/dialog';
 import { ScrollArea } from './components/ui/scroll-area';
 import { Badge } from './components/ui/badge';
@@ -47,7 +46,7 @@ export default function App() {
   const [currentSession, setCurrentSession]     = useState<Session | null>(null);
   const [isNewSessionOpen, setIsNewSessionOpen] = useState(false);
   const [newSessionName, setNewSessionName]     = useState('');
-  const [newSessionType, setNewSessionType]     = useState<DiagramType>('system-design');
+  const newSessionType: DiagramType             = 'system-design';
   const [activeTab, setActiveTab]               = useState('analysis');
   const [isAnalyzing, setIsAnalyzing]           = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -309,7 +308,7 @@ export default function App() {
                 <div className="font-medium text-sm mb-1 pr-5">{session.name}</div>
                 <div className="flex items-center gap-2 text-xs text-gray-500">
                   <Badge variant="outline" className="text-xs">
-                    {session.diagramType === 'system-design' ? 'System Design' : 'Timeline/Roadmap'}
+                    System Design
                   </Badge>
                   <span>{session.versions.length} version{session.versions.length !== 1 ? 's' : ''}</span>
                 </div>
@@ -356,7 +355,7 @@ export default function App() {
                 <div>
                   <h2 className="text-xl font-semibold">{currentSession.name}</h2>
                   <p className="text-sm text-gray-500">
-                    {currentSession.diagramType === 'system-design' ? 'System Design Diagram' : 'Timeline/Roadmap'}
+                    System Design Diagram
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -473,18 +472,7 @@ export default function App() {
             </div>
             <div>
               <Label className='py-2' htmlFor="diagram-type">Diagram Type</Label>
-              <Select
-                value={newSessionType}
-                onValueChange={(value) => setNewSessionType(value as DiagramType)}
-              >
-                <SelectTrigger id="diagram-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="system-design">System Design</SelectItem>
-                  <SelectItem value="timeline-roadmap">Timeline/Roadmap</SelectItem>
-                </SelectContent>
-              </Select>
+              <div id="diagram-type" className="text-sm text-gray-700 px-3 py-2 border rounded-md bg-gray-50">System Design</div>
             </div>
           </div>
           <DialogFooter>

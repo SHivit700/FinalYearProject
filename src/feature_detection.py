@@ -18,13 +18,7 @@ from features.color_harmony import compute_color_harmony_score
 from features.cognitive_chunk_density import compute_cognitive_chunk_density_from_diagram
 from features.edge_detection_visualization import compute_edge_detection_visualization
 from features.label_contrast_quality import compute_label_contrast_quality
-from features.label_contrast_quality_visualization import compute_label_contrast_visualization
-from features.edge_clearance_visualization import compute_edge_clearance_visualization
-from features.label_readability_visualization import compute_label_readability_visualization
-from features.label_overlap_visualization import compute_label_overlap_visualization
 from features.orientation_consistency import compute_orientation_consistency
-from features.orientation_consistency_visualization import compute_orientation_consistency_visualization
-from features.brevity_visualization import compute_brevity_visualization
 
 
 def _augment_labels_with_tilted_shapes(labels: list, shapes: list) -> list:
@@ -111,99 +105,39 @@ def _augment_labels_with_tilted_shapes(labels: list, shapes: list) -> list:
 def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: str = "system_design") -> Dict[str, Any]:
     """OCR and shape detection, then aggregate feature metrics into one dict."""
     image_path = Path(image_path)
-    # Previews go next to the diagram tree (e.g. labels_output/, shapes_output/).
-    output_path = (
-        image_path.parent.parent
-        / "labels_output"
-        / f"{image_path.stem}_labels.png"
-    )
 
-    detection_result = run_label_detection(str(image_path), lang=lang, output_path=output_path)
+    detection_result = run_label_detection(str(image_path), lang=lang)
     labels = detection_result["labels"]
     image_shape = detection_result["image_shape"]
     bgr_image = detection_result["bgr_image"]
 
-    shapes_output_path = (
-        image_path.parent.parent
-        / "shapes_output"
-        / f"shapes_{image_path.stem}.png"
-    )
     margin_fraction = 0.05
-    shapes, _shape_image_shape, _shape_highlighted = run_shape_detection(
-        str(image_path),
-        output_path=str(shapes_output_path),
-    )
-
-    container_utilization_overlay_path = (
-        image_path.parent.parent
-        / "shapes_output"
-        / f"container_utilization_{image_path.stem}.png"
-    )
+    shapes, _shape_image_shape, _shape_highlighted = run_shape_detection(str(image_path))
 
     features: Dict[str, Any] = {}
 
     features["label_area"] = compute_label_area_ratio(labels, image_shape)
     features["label_readability"] = compute_label_readability(labels)
-
-    label_readability_viz_path = (
-        image_path.parent.parent
-        / "label readability detection"
-        / f"label_readability_{image_path.stem}.png"
-    )
-    compute_label_readability_visualization(
-        bgr_image,
-        features["label_readability"],
-        output_path=str(label_readability_viz_path),
-    )
-
     features["overlap_metrics"] = compute_label_overlap_metrics(labels, image_shape)
-
-    label_overlap_viz_path = (
-        image_path.parent.parent
-        / "label overlap detection"
-        / f"label_overlap_{image_path.stem}.png"
-    )
-    compute_label_overlap_visualization(
-        bgr_image,
-        features["overlap_metrics"],
-        output_path=str(label_overlap_viz_path),
-    )
 
     features["edge_clearance"] = compute_edge_margin_metrics(
         labels, shapes, image_shape, margin_fraction=margin_fraction
     )
 
-    edge_clearance_viz_path = (
-        image_path.parent.parent
-        / "edge clearance detection"
-        / f"edge_clearance_{image_path.stem}.png"
-    )
-    compute_edge_clearance_visualization(
-        bgr_image,
-        features["edge_clearance"],
-        output_path=str(edge_clearance_viz_path),
-    )
-
     features["layout_structure"] = compute_layout_structure_score(shapes, image_shape)
     features["font_hierarchy"] = compute_font_hierarchy_metrics(labels)
     _container_utilization = compute_container_utilization_metrics(
-        bgr_image,
-        labels,
-        shapes,
-        image_shape,
-        output_path=str(container_utilization_overlay_path),
+        bgr_image, labels, shapes, image_shape,
     )
     features["container_utilization"] = {
         "container_utilization_score": _container_utilization["image_metrics"][
             "container_utilization_score"
         ],
-        # Tier-1 boxes are auto-flagged (very blank, large, no connectors/OCR).
         "empty_container_boxes": [
             {"x": d["x"], "y": d["y"], "w": d["w"], "h": d["h"]}
             for d in _container_utilization.get("box_details", [])
             if d.get("is_tier1_empty", False)
         ],
-        # Tier-2 boxes are ambiguous; the LLM confirms which are real issues.
         "empty_container_candidate_boxes": [
             {"x": d["x"], "y": d["y"], "w": d["w"], "h": d["h"]}
             for d in _container_utilization.get("box_details", [])
@@ -211,17 +145,7 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
         ],
     }
 
-    island_detection_output_path = (
-        image_path.parent.parent
-        / "isolated box detection"
-        / f"isolated_box_{image_path.stem}.png"
-    )
-    _island_result = compute_isolated_box_metrics(
-        bgr_image,
-        shapes,
-        image_shape,
-        output_path=str(island_detection_output_path),
-    )
+    _island_result = compute_isolated_box_metrics(bgr_image, shapes, image_shape)
     features["isolated_boxes"] = {
         "total_box_count": _island_result["total_box_count"],
         "connected_count": _island_result["connected_count"],
@@ -233,36 +157,12 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
 
     features["brevity"] = compute_brevity_score(labels, shapes, diagram_type=diagram_type)
 
-    brevity_viz_path = (
-        image_path.parent.parent
-        / "brevity detection"
-        / f"brevity_{image_path.stem}.png"
-    )
-    compute_brevity_visualization(
-        bgr_image,
-        features["brevity"],
-        output_path=str(brevity_viz_path),
-        shapes=shapes,
-    )
-
     features["whitespace_distribution"] = compute_whitespace_distribution_from_diagram(
         labels, shapes, image_shape, bgr_image=bgr_image
     )
 
     features["color_harmony"] = compute_color_harmony_score(bgr_image, labels)
-
     features["label_contrast"] = compute_label_contrast_quality(bgr_image, labels)
-
-    label_contrast_viz_path = (
-        image_path.parent.parent
-        / "label contrast quality detection"
-        / f"label_contrast_{image_path.stem}.png"
-    )
-    compute_label_contrast_visualization(
-        bgr_image,
-        features["label_contrast"],
-        output_path=str(label_contrast_viz_path),
-    )
 
     features["cognitive_chunk_density"] = compute_cognitive_chunk_density_from_diagram(
         labels, shapes, image_shape
@@ -271,28 +171,8 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
     _oc_labels = _augment_labels_with_tilted_shapes(labels, shapes)
     features["orientation_consistency"] = compute_orientation_consistency(_oc_labels)
 
-    orientation_viz_path = (
-        image_path.parent.parent
-        / "orientation consistency detection"
-        / f"orientation_consistency_{image_path.stem}.png"
-    )
-    compute_orientation_consistency_visualization(
-        bgr_image,
-        features["orientation_consistency"],
-        output_path=str(orientation_viz_path),
-    )
-
-    edge_viz_output_path = (
-        image_path.parent.parent
-        / "edge_detection"
-        / f"edge_detection_{image_path.stem}.png"
-    )
     features["edge_detection"] = compute_edge_detection_visualization(
-        bgr_image,
-        shapes,
-        image_shape,
-        labels=labels,
-        output_path=str(edge_viz_output_path),
+        bgr_image, shapes, image_shape, labels=labels,
     )
 
     features["image_shape"] = image_shape
