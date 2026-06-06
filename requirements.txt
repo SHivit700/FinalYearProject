@@ -1,7 +1,7 @@
 # Text overlap: OCR + overlap ratio (no training)
 # Python 3.10+
 
-opencv-python>=4.8.0
+opencv-python-headless>=4.8.0
 easyocr>=1.7.0
 pandas>=2.0.0
 scikit-learn>=1.3.0

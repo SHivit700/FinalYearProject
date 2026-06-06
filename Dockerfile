@@ -2,13 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# System dependencies required by OpenCV and EasyOCR
+# System dependencies for EasyOCR (opencv-python-headless needs no display libs)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1 \
     libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install CPU-only PyTorch + torchvision together — must come from the same index
