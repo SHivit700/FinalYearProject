@@ -1,0 +1,25 @@
+venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+.env
+.env.*
+
+# Frontend — not needed in the backend image
+Diagram Analyser App/
+
+# Data directories — sessions/uploads are runtime state, not build-time
+src/data/
+
+# Docs and reports
+sections/
+*.pdf
+*.md
+
+# Tests
+tests/
+
+# Git
+.git/
+.gitignore
