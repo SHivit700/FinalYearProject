@@ -24,7 +24,6 @@ RUN python -c "import easyocr; easyocr.Reader(['en'], gpu=False)"
 
 # Copy application source
 COPY src/ ./src/
-COPY agents/ ./agents/
 
 # Create writable data directories (mount a Railway volume here to persist sessions)
 RUN mkdir -p src/data/sessions src/data/uploads
