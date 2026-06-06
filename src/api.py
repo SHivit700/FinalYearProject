@@ -19,8 +19,6 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
-import os
-
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -46,15 +44,9 @@ import threshold_manager
 
 app = FastAPI(title="Diagram Analyser API")
 
-_CORS_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:4173",
-    *[o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()],
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_CORS_ORIGINS,
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
