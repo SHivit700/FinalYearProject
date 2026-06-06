@@ -27,7 +27,6 @@ _SRC_DIR = Path(__file__).parent
 if str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
 
-from analyze_diagram import _analyze_new_version, _apply_llm_action
 from chat_router import route_message
 from suggestion_engine import (
     _SESSIONS_DIR,
@@ -335,6 +334,9 @@ async def delete_session(session_id: str) -> dict:
 
 @app.post("/api/sessions/{session_id}/analyze")
 async def analyze(session_id: str, file: UploadFile = File(...)) -> dict:
+    # Lazy import — keeps cv2/EasyOCR/torch out of memory until first analysis
+    from analyze_diagram import _analyze_new_version, _apply_llm_action  # noqa: F401
+
     session, session_path = _load_session_by_id(session_id)
 
     # Save uploaded file to disk
@@ -370,6 +372,8 @@ async def analyze(session_id: str, file: UploadFile = File(...)) -> dict:
 
 @app.post("/api/sessions/{session_id}/chat")
 async def chat(session_id: str, body: ChatRequest) -> dict:
+    from analyze_diagram import _apply_llm_action  # noqa: F401
+
     session, path = _load_session_by_id(session_id)
 
     route = route_message(body.message)
