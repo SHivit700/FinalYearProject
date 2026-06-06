@@ -26,9 +26,6 @@ COPY src/ ./src/
 # Create writable data directories (mount a Railway volume here to persist sessions)
 RUN mkdir -p src/data/sessions src/data/uploads
 
-# Railway injects PORT at runtime; default to 8001 for local Docker runs
-ENV PORT=8001
+EXPOSE 8080
 
-EXPOSE 8001
-
-CMD ["sh", "-c", "uvicorn src.api:app --host 0.0.0.0 --port ${PORT}"]
+CMD ["sh", "-c", "uvicorn src.api:app --host 0.0.0.0 --port ${PORT:-8080}"]

@@ -56,6 +56,11 @@ _SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
 
 _analysis_lock = asyncio.Lock()
 
+
+@app.get("/health")
+async def health() -> dict:
+    return {"status": "ok"}
+
 # ---------------------------------------------------------------------------
 # Metric mapping
 # ---------------------------------------------------------------------------
