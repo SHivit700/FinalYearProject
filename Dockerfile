@@ -26,6 +26,8 @@ COPY src/ ./src/
 # Create writable data directories (mount a Railway volume here to persist sessions)
 RUN mkdir -p src/data/sessions src/data/uploads
 
+ENV PYTHONUNBUFFERED=1
+
 EXPOSE 8080
 
-CMD ["sh", "-c", "exec uvicorn src.api:app --host 0.0.0.0 --port ${PORT:-8080}"]
+CMD ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8080"]
