@@ -11,8 +11,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrender-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install CPU-only PyTorch first — avoids pulling the 2.5 GB CUDA build
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+# Install CPU-only PyTorch + torchvision together — must come from the same index
+# to avoid the torchvision::nms version mismatch error
+RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
 # Install remaining dependencies (torch already satisfied, streamlit excluded — not needed for API)
 COPY requirements.txt .
