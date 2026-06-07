@@ -35,4 +35,4 @@ RUN mkdir -p src/data/sessions src/data/uploads
 
 EXPOSE 8080
 
-CMD ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8080", "--log-level", "debug"]
