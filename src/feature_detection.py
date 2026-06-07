@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import time
 from pathlib import Path
 from typing import Any, Dict
 
@@ -106,14 +107,19 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
     """OCR and shape detection, then aggregate feature metrics into one dict."""
     image_path = Path(image_path)
 
+    _t0 = time.perf_counter()
     detection_result = run_label_detection(str(image_path), lang=lang)
+    _t_ocr = time.perf_counter() - _t0
     labels = detection_result["labels"]
     image_shape = detection_result["image_shape"]
     bgr_image = detection_result["bgr_image"]
 
     margin_fraction = 0.05
+    _t0 = time.perf_counter()
     shapes, _shape_image_shape, _shape_highlighted = run_shape_detection(str(image_path))
+    _t_shape = time.perf_counter() - _t0
 
+    _t0 = time.perf_counter()
     features: Dict[str, Any] = {}
 
     features["label_area"] = compute_label_area_ratio(labels, image_shape)
@@ -174,6 +180,12 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
     features["edge_detection"] = compute_edge_detection_visualization(
         bgr_image, shapes, image_shape, labels=labels,
     )
+
+    _t_features = time.perf_counter() - _t0
+
+    print(f"[TIMING] Stage 1 — Shape detection:    {_t_shape:.3f}s")
+    print(f"[TIMING] Stage 2 — EasyOCR:            {_t_ocr:.3f}s")
+    print(f"[TIMING] Stage 3 — Feature extraction: {_t_features:.3f}s")
 
     features["image_shape"] = image_shape
     features["shapes"] = shapes

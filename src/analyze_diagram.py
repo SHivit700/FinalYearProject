@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -179,12 +180,15 @@ def _analyze_new_version(
     version_number = len(session.get("diagram_versions", [])) + 1
     print(f"\n[Version {version_number}] Analysing {image_path.name}...")
 
+    _t0 = time.perf_counter()
     result = extract_features_for_image(str(image_path), diagram_type=session["diagram_type"])
+    _t_extraction = time.perf_counter() - _t0
     features = result["features"]
 
     _raw_shape = features.get("image_shape", (1000, 1000, 3))
     _img_shape_2d = (_raw_shape[0], _raw_shape[1])
 
+    _t0 = time.perf_counter()
     suggestions_result = generate_suggestions(
         features,
         diagram_type=session["diagram_type"],
@@ -193,6 +197,11 @@ def _analyze_new_version(
         session=session,
         img_shape=_img_shape_2d,
     )
+    _t_llm = time.perf_counter() - _t0
+    print(f"[TIMING] Stage 4 — LLM synthesis:      {_t_llm:.3f}s")
+    print(f"[TIMING] ──────────────────────────────────────")
+    print(f"[TIMING] Total (without LLM):           {_t_extraction:.3f}s")
+    print(f"[TIMING] Total (with LLM):              {_t_extraction + _t_llm:.3f}s")
 
     metric_scores = {m: _get_score(features, m) for m in _ACTIVE_METRICS}
     version_record = {
