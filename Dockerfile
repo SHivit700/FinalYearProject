@@ -15,6 +15,9 @@ RUN pip install --no-cache-dir torch torchvision --index-url https://download.py
 ENV PYTHONUNBUFFERED=1
 # Store EasyOCR models inside the image layer so they aren't re-downloaded on every cold start
 ENV EASYOCR_MODULE_PATH=/app/.EasyOCR
+# Limit torch/numpy threading to reduce RAM footprint on single-core Railway containers
+ENV OMP_NUM_THREADS=1
+ENV MKL_NUM_THREADS=1
 
 # Install remaining dependencies (torch already satisfied, streamlit excluded — not needed for API)
 COPY requirements.txt .
