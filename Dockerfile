@@ -12,6 +12,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # to avoid the torchvision::nms version mismatch error
 RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
+ENV PYTHONUNBUFFERED=1
+# Store EasyOCR models inside the image layer so they aren't re-downloaded on every cold start
+ENV EASYOCR_MODULE_PATH=/app/.EasyOCR
+
 # Install remaining dependencies (torch already satisfied, streamlit excluded — not needed for API)
 COPY requirements.txt .
 RUN grep -v "^streamlit\|^plotly" requirements.txt \
@@ -25,8 +29,6 @@ COPY src/ ./src/
 
 # Create writable data directories (mount a Railway volume here to persist sessions)
 RUN mkdir -p src/data/sessions src/data/uploads
-
-ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8080
 
