@@ -184,6 +184,7 @@ def _analyze_new_version(
     result = extract_features_for_image(str(image_path), diagram_type=session["diagram_type"])
     _t_extraction = time.perf_counter() - _t0
     features = result["features"]
+    _stage_timings = result.get("timings", {})
 
     _raw_shape = features.get("image_shape", (1000, 1000, 3))
     _img_shape_2d = (_raw_shape[0], _raw_shape[1])
@@ -198,10 +199,13 @@ def _analyze_new_version(
         img_shape=_img_shape_2d,
     )
     _t_llm = time.perf_counter() - _t0
-    print(f"[TIMING] Stage 4 — LLM synthesis:      {_t_llm:.3f}s")
-    print(f"[TIMING] ──────────────────────────────────────")
-    print(f"[TIMING] Total (without LLM):           {_t_extraction:.3f}s")
-    print(f"[TIMING] Total (with LLM):              {_t_extraction + _t_llm:.3f}s")
+
+    suggestions_result["timings"] = {
+        **_stage_timings,
+        "stage4_llm_s": round(_t_llm, 3),
+        "total_no_llm_s": round(_t_extraction, 3),
+        "total_with_llm_s": round(_t_extraction + _t_llm, 3),
+    }
 
     metric_scores = {m: _get_score(features, m) for m in _ACTIVE_METRICS}
     version_record = {
@@ -278,7 +282,7 @@ def _chat_loop(
                 _print_sep()
             reply = f"Version {len(versions)} analysed. Composite score: {current_composite_score}."
             session["chat_history"] += [
-                {"role": "user",      "content": f"[submitted new diagram: {data['path']}]"},
+                {"role": "user", "content": f"[submitted new diagram: {data['path']}]"},
                 {"role": "assistant", "content": reply},
             ]
             save_session(session, session_path)
@@ -421,7 +425,6 @@ def main() -> None:
         print(f"Error: image not found: {image_path}", file=sys.stderr)
         sys.exit(1)
 
-    # ── Load or create session ────────────────────────────────────────────
     if args.session:
         session_path = args.session
         session = load_session(session_path)
@@ -437,7 +440,6 @@ def main() -> None:
     print(f"[Version {version_number}] Analysing diagram: {image_path.name}")
     _print_sep()
 
-    # ── Feature extraction ────────────────────────────────────────────────
     try:
         result = extract_features_for_image(
             str(image_path),
@@ -452,7 +454,6 @@ def main() -> None:
     _raw_shape2 = features.get("image_shape", (1000, 1000, 3))
     _img_shape_2d2 = (_raw_shape2[0], _raw_shape2[1])
 
-    # ── Generate suggestions ──────────────────────────────────────────────
     suggestions_result = generate_suggestions(
         features,
         diagram_type=session["diagram_type"],
@@ -462,7 +463,6 @@ def main() -> None:
         img_shape=_img_shape_2d2,
     )
 
-    # ── Build version record ──────────────────────────────────────────────
     metric_scores = {
         metric: _get_score(features, metric)
         for metric in _ACTIVE_METRICS
@@ -480,13 +480,11 @@ def main() -> None:
     session.setdefault("diagram_versions", []).append(version_record)
     session.setdefault("chat_history", [])
 
-    # ── Dispatch to mode ──────────────────────────────────────────────────
     if args.chat:
         save_session(session, session_path)
         _chat_loop(suggestions_result, session, session_path, features)
         return
 
-    # ── Default / interactive ─────────────────────────────────────────────
     print()
     print(format_text_report(suggestions_result))
     _print_sep()

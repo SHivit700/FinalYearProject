@@ -183,10 +183,6 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
 
     _t_features = time.perf_counter() - _t0
 
-    print(f"[TIMING] Stage 1 — Shape detection:    {_t_shape:.3f}s")
-    print(f"[TIMING] Stage 2 — EasyOCR:            {_t_ocr:.3f}s")
-    print(f"[TIMING] Stage 3 — Feature extraction: {_t_features:.3f}s")
-
     features["image_shape"] = image_shape
     features["shapes"] = shapes
 
@@ -196,6 +192,11 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
         "shapes": shapes,
         "image_shape": image_shape,
         "features": features,
+        "timings": {
+            "stage1_shape_s":    round(_t_shape, 3),
+            "stage2_ocr_s":      round(_t_ocr, 3),
+            "stage3_features_s": round(_t_features, 3),
+        },
     }
 
 

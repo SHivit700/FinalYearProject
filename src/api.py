@@ -37,10 +37,6 @@ from suggestion_engine import (
 )
 import threshold_manager
 
-# ---------------------------------------------------------------------------
-# App + CORS
-# ---------------------------------------------------------------------------
-
 app = FastAPI(title="Diagram Analyser API")
 
 app.add_middleware(
@@ -61,22 +57,18 @@ _analysis_lock = asyncio.Lock()
 async def health() -> dict:
     return {"status": "ok"}
 
-# ---------------------------------------------------------------------------
-# Metric mapping
-# ---------------------------------------------------------------------------
-
 PYTHON_KEY_TO_REACT_NAME: dict[str, str] = {
-    "label_readability":       "Label Readability",
-    "label_area":              "Label Area",
-    "overlap_metrics":         "Overlap (Crowding)",
-    "edge_clearance":          "Edge Clearance",
-    "font_hierarchy":          "Font Hierarchy",
-    "container_utilization":   "Container Utilisation",
-    "isolated_boxes":          "Isolated Boxes",
-    "brevity":                 "Brevity",
+    "label_readability": "Label Readability",
+    "label_area": "Label Area",
+    "overlap_metrics": "Overlap (Crowding)",
+    "edge_clearance": "Edge Clearance",
+    "font_hierarchy": "Font Hierarchy",
+    "container_utilization": "Container Utilisation",
+    "isolated_boxes": "Isolated Boxes",
+    "brevity": "Brevity",
     "whitespace_distribution": "Whitespace Distribution",
-    "color_harmony":           "Color Harmony",
-    "label_contrast":          "Label Contrast",
+    "color_harmony": "Color Harmony",
+    "label_contrast": "Label Contrast",
     "cognitive_chunk_density": "Cognitive Chunk Density",
     "orientation_consistency": "Orientation Consistency",
 }
@@ -105,9 +97,9 @@ def _convert_locations(
         x2 = loc.get("x2", x1)
         y2 = loc.get("y2", y1)
         result.append({
-            "x":      round(x1 / W * 100, 2),
-            "y":      round(y1 / H * 100, 2),
-            "width":  round((x2 - x1) / W * 100, 2),
+            "x": round(x1 / W * 100, 2),
+            "y": round(y1 / H * 100, 2),
+            "width": round((x2 - x1) / W * 100, 2),
             "height": round((y2 - y1) / H * 100, 2),
         })
     return result
@@ -136,14 +128,14 @@ def _suggestion_to_metric_result(
     react_name = PYTHON_KEY_TO_REACT_NAME.get(py_key, py_key)
     score = suggestion.get("score")
     result: dict = {
-        "name":             react_name,
-        "score":            round(score) if score is not None else 0,
-        "severity":         _map_severity_to_react(suggestion.get("severity", "ok")),
-        "description":      suggestion.get("issue", ""),
-        "recommendation":   suggestion.get("recommendation", ""),
+        "name": react_name,
+        "score": round(score) if score is not None else 0,
+        "severity": _map_severity_to_react(suggestion.get("severity", "ok")),
+        "description": suggestion.get("issue", ""),
+        "recommendation": suggestion.get("recommendation", ""),
         "flaggedLocations": _convert_locations(suggestion.get("locations", []), image_shape),
-        "llmRegions":       (llm_regions or {}).get(py_key, []),
-        "isDismissed":      py_key in dismissed_py_keys,
+        "llmRegions": (llm_regions or {}).get(py_key, []),
+        "isDismissed": py_key in dismissed_py_keys,
     }
     if llm_analysis_index:
         llm_data = llm_analysis_index.get(py_key)
@@ -200,15 +192,15 @@ def _version_to_analysis_result(version: dict, session: dict) -> dict:
     ai_narrative = llm.get("overall_summary") or None
 
     return {
-        "version":        version["version"],
-        "timestamp":      version.get("analyzed_at", datetime.now().isoformat()),
-        "imagePath":      Path(version.get("diagram_path", "")).name,
-        "imageData":      _load_image_as_base64(version.get("diagram_path", "")),
+        "version": version["version"],
+        "timestamp": version.get("analyzed_at", datetime.now().isoformat()),
+        "imagePath": Path(version.get("diagram_path", "")).name,
+        "imageData": _load_image_as_base64(version.get("diagram_path", "")),
         "compositeScore": round(version.get("composite_score") or 0),
-        "metrics":        metrics,
-        "criticalCount":  critical_count,
-        "warningCount":   warning_count,
-        "aiNarrative":    ai_narrative,
+        "metrics": metrics,
+        "criticalCount": critical_count,
+        "warningCount": warning_count,
+        "aiNarrative": ai_narrative,
     }
 
 
@@ -222,15 +214,13 @@ def _react_to_python_diagram_type(react_type: str) -> str:
 
 def _python_session_to_react(session: dict) -> dict:
     return {
-        "id":               session["session_id"],
-        "name":             session.get("name", session["session_id"]),
-        "diagramType":      _python_to_react_diagram_type(session["diagram_type"]),
-        "createdAt":        session.get("created_at", datetime.now().isoformat()),
-        "updatedAt":        session.get("updated_at", datetime.now().isoformat()),
-        "versions":         [_version_to_analysis_result(v, session)
-                             for v in session.get("diagram_versions", [])],
-        "dismissedMetrics": [PYTHON_KEY_TO_REACT_NAME.get(k, k)
-                             for k in session.get("permanently_dismissed", [])],
+        "id": session["session_id"],
+        "name": session.get("name", session["session_id"]),
+        "diagramType": _python_to_react_diagram_type(session["diagram_type"]),
+        "createdAt": session.get("created_at", datetime.now().isoformat()),
+        "updatedAt": session.get("updated_at", datetime.now().isoformat()),
+        "versions": [_version_to_analysis_result(v, session) for v in session.get("diagram_versions", [])],
+        "dismissedMetrics": [PYTHON_KEY_TO_REACT_NAME.get(k, k) for k in session.get("permanently_dismissed", [])],
         "customThresholds": {},
     }
 
@@ -258,10 +248,6 @@ def _load_session_by_id(session_id: str) -> tuple[dict, Path]:
     return load_session(str(path)), path
 
 
-# ---------------------------------------------------------------------------
-# Pydantic request models
-# ---------------------------------------------------------------------------
-
 class CreateSessionRequest(BaseModel):
     name: str
     diagramType: str
@@ -281,10 +267,6 @@ class SeverityUpdateRequest(BaseModel):
     newSeverity: str
     currentScore: float
 
-
-# ---------------------------------------------------------------------------
-# Endpoints
-# ---------------------------------------------------------------------------
 
 @app.get("/api/sessions")
 async def list_sessions() -> list[dict]:
@@ -372,7 +354,10 @@ async def analyze(session_id: str, file: UploadFile = File(...)) -> dict:
     session["updated_at"] = datetime.now().isoformat()
     save_session(session, str(reloaded_path))
 
-    return _version_to_analysis_result(version_record, session)
+    result = _version_to_analysis_result(version_record, session)
+    if "timings" in suggestions_result:
+        result["timing"] = suggestions_result["timings"]
+    return result
 
 
 @app.post("/api/sessions/{session_id}/chat")
@@ -383,11 +368,11 @@ async def chat(session_id: str, body: ChatRequest) -> dict:
 
     route = route_message(body.message)
     intent = route.get("intent", "chat")
-    data   = route.get("data", {})
+    data = route.get("data", {})
 
     versions = session.get("diagram_versions", [])
     current_suggestions = versions[-1].get("suggestions", []) if versions else []
-    composite_score     = versions[-1].get("composite_score") if versions else None
+    composite_score = versions[-1].get("composite_score") if versions else None
 
     action: dict[str, Any] = {"type": "none", "metric": None}
 
@@ -434,12 +419,12 @@ async def chat(session_id: str, body: ChatRequest) -> dict:
         result = chat_with_llm(
             body.message, session, current_suggestions, composite_score, session["diagram_type"]
         )
-        reply  = result["reply"]
+        reply = result["reply"]
         action = result.get("action", {"type": "none", "metric": None})
         _apply_llm_action(action, session, {})
 
     session.setdefault("chat_history", []).extend([
-        {"role": "user",      "content": body.message},
+        {"role": "user", "content": body.message},
         {"role": "assistant", "content": reply},
     ])
     session["updated_at"] = datetime.now().isoformat()
@@ -461,10 +446,6 @@ async def update_metric_severity(
     threshold_manager.update_threshold(metric_key, body.currentScore, old_sev, new_sev)
     return {"ok": True}
 
-
-# ---------------------------------------------------------------------------
-# Static file serving — production mode only (requires pnpm build first)
-# ---------------------------------------------------------------------------
 
 _FRONTEND_DIST = _SRC_DIR.parent / "Diagram Analyser App" / "dist"
 if _FRONTEND_DIST.exists():
