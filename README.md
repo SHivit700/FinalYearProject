@@ -69,6 +69,26 @@ Frontend runs on `http://localhost:5173`, proxies API to `http://localhost:8000`
 
 ---
 
+## Deployment (public URL via ngrok)
+
+Run each command in a separate terminal.
+
+**Terminal 1 — start the backend:**
+
+```bash
+python -m uvicorn src.api:app --port 8001 --host 0.0.0.0
+```
+
+**Terminal 2 — expose it publicly:**
+
+```bash
+ngrok http 8001 --request-header-add "ngrok-skip-browser-warning:true"
+```
+
+Copy the `https://` forwarding URL from the ngrok output and set it as the API base URL in the frontend (e.g. in `.env` or `src/config.ts`).
+
+---
+
 ## Stack
 
 - **Backend:** Python 3.11, FastAPI, OpenCV, EasyOCR, PyTorch, scikit-learn, OpenAI SDK
