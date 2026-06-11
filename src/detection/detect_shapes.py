@@ -22,7 +22,8 @@ def run_shape_detection(
     threshold: int = 200,
 ) -> tuple[list[dict[str, Any]], tuple[int, int, int], np.ndarray]:
     """
-    Load an image from ``image_path``, find thresholded contours, draw each accepted contour on a copy of the image, and save the result.
+    Load an image, detect thresholded contours, draw each accepted contour on
+    a copy of the image, and optionally save the result to ``output_path``.
     """
     image = cv2.imread(image_path)
     if image is None:

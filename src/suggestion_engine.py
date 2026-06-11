@@ -991,8 +991,8 @@ def synthesize_with_llm(
 
         # Try to load diagram image for vision API
         image_b64: str | None = None
-        img_W: int = 0
-        img_H: int = 0
+        img_width: int = 0
+        img_height: int = 0
         if diagram_path:
             try:
                 import base64
@@ -1005,7 +1005,7 @@ def synthesize_with_llm(
                     arr = np.frombuffer(img_bytes, np.uint8)
                     img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
                     if img is not None:
-                        img_H, img_W = img.shape[:2]
+                        img_height, img_width = img.shape[:2]
                 except Exception:
                     pass
             except Exception as exc:
@@ -1036,13 +1036,13 @@ def synthesize_with_llm(
             if element_labels:
                 issues_text += f"  Elements affected: {', '.join(repr(n) for n in element_labels)}\n"
             # Append spatial context using normalized coordinates when image dims are known
-            if img_W and img_H and locations:
+            if img_width and img_height and locations:
                 spatial_hints = []
                 for loc in locations[:5]:
                     px1, py1 = loc.get("x1", 0), loc.get("y1", 0)
                     px2, py2 = loc.get("x2", px1), loc.get("y2", py1)
-                    cx_pct = ((px1 + px2) / 2) / img_W * 100
-                    cy_pct = ((py1 + py2) / 2) / img_H * 100
+                    cx_pct = ((px1 + px2) / 2) / img_width * 100
+                    cy_pct = ((py1 + py2) / 2) / img_height * 100
                     h = "left" if cx_pct < 33 else ("center" if cx_pct < 66 else "right")
                     v = "top" if cy_pct < 33 else ("middle" if cy_pct < 66 else "bottom")
                     quad = "center" if (h == "center" and v == "middle") else (

@@ -451,8 +451,8 @@ def main() -> None:
 
     features = result["features"]
 
-    _raw_shape2 = features.get("image_shape", (1000, 1000, 3))
-    _img_shape_2d2 = (_raw_shape2[0], _raw_shape2[1])
+    image_shape_raw = features.get("image_shape", (1000, 1000, 3))
+    image_shape_2d = (image_shape_raw[0], image_shape_raw[1])
 
     suggestions_result = generate_suggestions(
         features,
@@ -460,7 +460,7 @@ def main() -> None:
         image_path=str(image_path),
         use_llm=True,
         session=session,
-        img_shape=_img_shape_2d2,
+        img_shape=image_shape_2d,
     )
 
     metric_scores = {

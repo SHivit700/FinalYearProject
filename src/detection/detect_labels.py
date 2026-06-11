@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+"""
+OCR-based label detection using EasyOCR with multi-rotation support and IoU NMS.
+"""
 from pathlib import Path
 
 # Rotation angles (degrees) tried in addition to the default 0° pass.

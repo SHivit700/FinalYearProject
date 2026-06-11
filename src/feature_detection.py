@@ -116,7 +116,7 @@ def extract_features_for_image(image_path: str, lang: str = "en", diagram_type: 
 
     margin_fraction = 0.05
     _t0 = time.perf_counter()
-    shapes, _shape_image_shape, _shape_highlighted = run_shape_detection(str(image_path))
+    shapes, _, _ = run_shape_detection(str(image_path))
     _t_shape = time.perf_counter() - _t0
 
     _t0 = time.perf_counter()
@@ -279,12 +279,6 @@ if __name__ == "__main__":
         f"(max_fraction_ok={label_readability['max_fraction_below_threshold']:.4f}), "
         f"status={label_readability['readability_status']}"
     )
-    # for row in label_readability["labels_below_threshold_details"]:
-    #     print(
-    #         f"[ENTRY]   low-confidence label #{row['index']}: "
-    #         f"{row['text']!r} conf={row['confidence']:.4f}"
-        # )
-
     print("---------------LAYOUT STRUCTURE (ML)------------------")
     layout = feats["layout_structure"]
     print(f"[ENTRY] layout_structure_score: {layout['layout_structure_score']:.4f}")

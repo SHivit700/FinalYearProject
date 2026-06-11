@@ -1,5 +1,4 @@
-# Text overlap: OCR + overlap ratio (no training)
-# Python 3.10+
+# Python 3.11+ required
 
 opencv-python-headless>=4.8.0
 easyocr>=1.7.0

@@ -187,7 +187,7 @@ def _version_to_analysis_result(version: dict, session: dict) -> dict:
 
     active = [m for m in metrics if not m["isDismissed"]]
     critical_count = sum(1 for m in active if m["severity"] == "critical")
-    warning_count  = sum(1 for m in active if m["severity"] == "warning")
+    warning_count = sum(1 for m in active if m["severity"] == "warning")
 
     ai_narrative = llm.get("overall_summary") or None
 
@@ -322,7 +322,7 @@ async def delete_session(session_id: str) -> dict:
 @app.post("/api/sessions/{session_id}/analyze")
 async def analyze(session_id: str, file: UploadFile = File(...)) -> dict:
     # Lazy import — keeps cv2/EasyOCR/torch out of memory until first analysis
-    from analyze_diagram import _analyze_new_version, _apply_llm_action  # noqa: F401
+    from analyze_diagram import _analyze_new_version
 
     session, session_path = _load_session_by_id(session_id)
 
@@ -362,7 +362,7 @@ async def analyze(session_id: str, file: UploadFile = File(...)) -> dict:
 
 @app.post("/api/sessions/{session_id}/chat")
 async def chat(session_id: str, body: ChatRequest) -> dict:
-    from analyze_diagram import _apply_llm_action  # noqa: F401
+    from analyze_diagram import _apply_llm_action
 
     session, path = _load_session_by_id(session_id)
 

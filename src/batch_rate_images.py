@@ -1,3 +1,13 @@
+"""
+Batch layout-structure annotation script.
+
+Runs GPT-4.1-mini (text-only) on each diagram's detected contour geometry and writes
+row/column/layout scores to data/score_annotation.csv for supervised model training.
+
+Usage:
+    python src/batch_rate_images.py              # process all images in data/diagrams/
+    python src/batch_rate_images.py diagram.png  # process a single image
+"""
 from __future__ import annotations
 
 import argparse
