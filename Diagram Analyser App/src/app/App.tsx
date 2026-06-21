@@ -53,10 +53,8 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing]           = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const currentSessionIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    currentSessionIdRef.current = currentSession?.id ?? null;
-  }, [currentSession]);
+  // Keep ref in sync synchronously on every render (not in an effect, to avoid async timing gap)
+  currentSessionIdRef.current = currentSession?.id ?? null;
 
   useEffect(() => {
     getAllSessions().then((allSessions) => {
