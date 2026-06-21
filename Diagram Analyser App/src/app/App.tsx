@@ -23,6 +23,8 @@ import { Label } from './components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './components/ui/dialog';
 import { ScrollArea } from './components/ui/scroll-area';
 import { Badge } from './components/ui/badge';
+import { Toaster } from './components/ui/sonner';
+import { toast } from 'sonner';
 
 // React display name → Python metric key (for threshold PATCH calls)
 const REACT_NAME_TO_PYTHON_KEY: Record<string, string> = {
@@ -50,6 +52,11 @@ export default function App() {
   const [activeTab, setActiveTab]               = useState('analysis');
   const [isAnalyzing, setIsAnalyzing]           = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const currentSessionIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    currentSessionIdRef.current = currentSession?.id ?? null;
+  }, [currentSession]);
 
   useEffect(() => {
     getAllSessions().then((allSessions) => {
@@ -99,17 +106,32 @@ export default function App() {
   const processImage = async (file: File) => {
     if (!currentSession) return;
 
+    const analyzingSessionId = currentSession.id;
     setIsAnalyzing(true);
     try {
       // Server runs analysis and appends the new version to the session
-      await analyzeImage(file, currentSession.id);
-      // Re-fetch the full session so the UI reflects the new version
-      const updated = await getSession(currentSession.id);
+      await analyzeImage(file, analyzingSessionId);
+      // Re-fetch the updated session data
+      const updated = await getSession(analyzingSessionId);
       if (updated) {
-        setCurrentSession(updated);
         await refreshSessions();
+        if (currentSessionIdRef.current === analyzingSessionId) {
+          setCurrentSession(updated);
+          setActiveTab('analysis');
+        } else {
+          toast(`Analysis complete: "${updated.name}"`, {
+            description: `Score: ${updated.versions[updated.versions.length - 1]?.compositeScore ?? '—'}/100`,
+            action: {
+              label: 'View',
+              onClick: () => {
+                setCurrentSession(updated);
+                setActiveTab('analysis');
+              },
+            },
+            duration: 8000,
+          });
+        }
       }
-      setActiveTab('analysis');
     } catch (error) {
       console.error('Analysis failed:', error);
     } finally {
@@ -449,6 +471,8 @@ export default function App() {
           </>
         )}
       </div>
+
+      <Toaster position="bottom-right" richColors />
 
       {/* New Session dialog */}
       <Dialog open={isNewSessionOpen} onOpenChange={setIsNewSessionOpen}>
